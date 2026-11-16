@@ -1,0 +1,77 @@
+# Foliolum's own workspace. DesignCraft is not a member: it is the patched checkout in
+# upstream/designcraft (fork/fetch.sh), and our crates depend on its crates by path.
+[workspace]
+resolver = "3"
+members = ["crates/*", "apps/*"]
+# DesignCraft has its own workspace; path deps inside our directory would otherwise join ours.
+exclude = ["upstream"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/doodlemania2/foliolum"
+rust-version = "1.95"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.dependencies]
+# DesignCraft, from the pinned and patched checkout.
+designcraft-geom = { path = "upstream/designcraft/crates/geom" }
+designcraft-color = { path = "upstream/designcraft/crates/color" }
+designcraft-doc = { path = "upstream/designcraft/crates/doc" }
+designcraft-compose = { path = "upstream/designcraft/crates/compose" }
+designcraft-images = { path = "upstream/designcraft/crates/images" }
+designcraft-engine = { path = "upstream/designcraft/crates/engine" }
+# Ours.
+foliolum-pub = { path = "crates/foliolum-pub" }
+# Third party.
+cfb = "0.15"
+log = "0.4"
+miniz_oxide = "0.8"
+serde_json = { version = "1", features = ["float_roundtrip"] }
+thiserror = "2"
+
+# >>> synced from upstream (fork/sync-workspace.sh; do not edit)
+[profile.dev.package."*"]
+opt-level = 2
+debug = false
+
+[profile.dev]
+opt-level = 1
+debug = "line-tables-only"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 16
+debug = 0
+
+# Opt-in cancelable macOS termination on the pinned winit 0.30 line.
+[patch.crates-io]
+krilla = { git = "https://github.com/storytold/craft-libs", rev = "a5ac3aa05cf3ec013961a85599ddd9e0b5c03813", version = "=0.8.2" }
+winit = { git = "https://github.com/storytold/winit.git", rev = "a517b3846ee8457d84ee4975110bfda6797c44dc" }
+# The hayro crates from craft-libs' vendor/ directory (pdfcraft's, plus the plate mode and decode
+# limits craft-pdf and craft-prepress need); same revision as craft-pdf.
+hayro = { git = "https://github.com/storytold/craft-libs", rev = "a5ac3aa05cf3ec013961a85599ddd9e0b5c03813", version = "=0.7.1" }
+hayro-interpret = { git = "https://github.com/storytold/craft-libs", rev = "a5ac3aa05cf3ec013961a85599ddd9e0b5c03813", version = "=0.7.0" }
+hayro-syntax = { git = "https://github.com/storytold/craft-libs", rev = "a5ac3aa05cf3ec013961a85599ddd9e0b5c03813", version = "=0.7.2" }
+hayro-jbig2 = { git = "https://github.com/storytold/craft-libs", rev = "a5ac3aa05cf3ec013961a85599ddd9e0b5c03813", version = "=0.3.0" }
+hayro-cmap = { git = "https://github.com/storytold/craft-libs", rev = "a5ac3aa05cf3ec013961a85599ddd9e0b5c03813", version = "=0.1.0" }
+hayro-postscript = { git = "https://github.com/storytold/craft-libs", rev = "a5ac3aa05cf3ec013961a85599ddd9e0b5c03813", version = "=0.1.0" }
+ecolor = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+emath = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+epaint = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+epaint_default_fonts = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui-winit = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui-wgpu = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_glow = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_extras = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_kittest = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_system_font_provider = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+eframe = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_demo_lib = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+egui_inspection = { git = "https://github.com/storytold/egui.git", rev = "6d518fc799681571963842f95b55a6b68431b15a" }
+# <<< synced from upstream

@@ -17,3 +17,7 @@ capture/.cache/
 *.p12
 kubeconfig
 local.settings.json
+
+# DesignCraft checkout (fork/fetch.sh) and Rust build output
+/upstream/
+/target/
