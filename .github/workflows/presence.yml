@@ -1,0 +1,31 @@
+# Tells foliolum.app and docs.foliolum.app (doodlemania2/foliolum-site) to rebuild on every push to
+# main (fleet presence standard, requirement 7). The shared workflow lives in the public
+# fleet-presence-dispatch repo. It works out which features changed from presence/features.json; a
+# feature that turns "ready" also gets a social post drafted in TDPPublic.
+#
+# Push to main only, never pull_request: this repo is public, the job runs on a self-hosted runner,
+# and it holds FLEET_DISPATCH_TOKEN. Without the token it warns and exits 0; the site's nightly run
+# is the fallback.
+name: presence
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: presence
+  cancel-in-progress: false
+
+jobs:
+  presence:
+    uses: doodlemania2/fleet-presence-dispatch/.github/workflows/presence-dispatch.yml@main
+    with:
+      property: foliolum
+      targets: '["doodlemania2/foliolum-site"]'
+      # The Linux tier on doodlemanage. Never a GitHub-hosted runner.
+      runner: ${{ vars.RUNNER_LINUX || 'tdp-linux' }}
+    secrets:
+      dispatch_token: ${{ secrets.FLEET_DISPATCH_TOKEN }}

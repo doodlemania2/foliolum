@@ -1,0 +1,15 @@
+version: 2
+updates:
+  # Dependabot PRs are notices, never CI runs: workflows here trigger on push to main only, or carry
+  # the dependabot guard on pull_request jobs. Security updates and alerts stay on.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+      major:
+        patterns: ["*"]
+        update-types: ["major"]
