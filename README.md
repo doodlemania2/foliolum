@@ -7,4 +7,4 @@ DesignCraft engine.
 
 Site: https://foliolum.app (coming soon). Guides: https://docs.foliolum.app.
 
-License: to be decided.
+License: MIT OR Apache-2.0, at your option (see LICENSE-MIT, LICENSE-APACHE and NOTICE).
