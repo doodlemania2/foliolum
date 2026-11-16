@@ -1,0 +1,77 @@
+# Builds the gate's test corpus with Microsoft Publisher on pve VM 100 (tools/corpus/make-corpus.ps1):
+# synthetic .pub files plus Publisher's own reference PDFs, zipped, with the SHA-256 in the job summary.
+#
+# workflow_dispatch only, and only for the repo owner: this repo is public and the runner is the fleet's
+# Windows VM (vm100-foliolum), run in capture's interactive desktop session because Publisher's COM server
+# needs one. No secrets. The zip is uploaded as a short-lived artifact; the gate keeps only hashes in git.
+# All content is invented (fictional "(sample)" names, 555-01xx numbers, example.org addresses).
+name: corpus
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit that holds tools/corpus/make-corpus.ps1
+        default: main
+        required: true
+      count:
+        description: Number of publications to generate (2 for a dry run)
+        default: '50'
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: corpus
+  cancel-in-progress: false
+
+jobs:
+  corpus:
+    if: github.actor == github.repository_owner
+    # VM 100 (Windows 11, Publisher 16). Never a GitHub-hosted runner.
+    runs-on: ${{ vars.RUNNER_WINDOWS || 'tdp-windows-build' }}
+    # A Publisher modal dialog blocks COM with no error, so bound the job hard.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Generate corpus
+        shell: powershell
+        env:
+          COUNT: ${{ inputs.count }}
+        run: |
+          if ($env:COUNT -notmatch '^[0-9]{1,3}$') { throw "count must be a number" }
+          # Start clean: the runner's profile keeps the last run's output.
+          $root = Join-Path $env:USERPROFILE 'foliolum-corpus'
+          if (Test-Path $root) { Remove-Item -Recurse -Force $root }
+          & .\tools\corpus\make-corpus.ps1 -Count ([int]$env:COUNT)
+          $code = $LASTEXITCODE
+          $zip = Join-Path $env:USERPROFILE 'foliolum-corpus.zip'
+          $sha = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+          "## Corpus`n`nCount: $env:COUNT`n`nSHA-256: ``$sha``" | Out-File -Append -Encoding utf8 $env:GITHUB_STEP_SUMMARY
+          New-Item -ItemType Directory -Force out | Out-Null
+          Copy-Item $zip out\
+          Copy-Item (Join-Path $root 'manifest.csv') out\
+          "$sha  foliolum-corpus.zip" | Out-File -Encoding ascii out\SHA256SUMS
+          # 2 = some files failed (see corpus.log); the artifact is still uploaded.
+          if ($code) { exit $code }
+
+      - name: Collect log
+        if: always()
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force out | Out-Null
+          $log = Join-Path $env:USERPROFILE 'foliolum-corpus\corpus.log'
+          if (Test-Path $log) { Copy-Item $log out\ }
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: foliolum-corpus
+          path: out/
+          retention-days: 3
+          if-no-files-found: warn
