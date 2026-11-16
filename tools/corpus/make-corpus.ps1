@@ -389,3 +389,4 @@ Log "sha256: $hash"
 Write-Host ''
 Write-Host "Send foliolum-corpus.zip and this hash to the Foliolum session:" -ForegroundColor Cyan
 Write-Host "  $hash" -ForegroundColor Cyan
+if ($failed -gt 0) { exit 2 }
