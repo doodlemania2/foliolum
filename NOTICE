@@ -15,3 +15,7 @@ Foliolum is not affiliated with or endorsed by Microsoft.
 
 Third-party material in this repository is listed here as it is added, with its
 source and license.
+
+- crates/foliolum-pub: NiftyDesign's Publisher (.pub) importer, Copyright (c) 2026 srt8hellcat2-ui,
+  MIT OR Apache-2.0 (https://github.com/srt8hellcat2-ui/niftydesign, crates/pub). Its per-file
+  headers are kept; crates/foliolum-pub/ORIGIN.md records the source commit and our changes.
