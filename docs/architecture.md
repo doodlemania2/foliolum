@@ -105,13 +105,22 @@ the two most realistic test files.
 ## The Phase 1 gate
 
 Microsoft Publisher is **not** part of the toolchain: it is out of support, and nothing in Foliolum may
-depend on a copy of it being available (Derek, 2026-11-16). There are no Publisher-made reference
-renders. The references are the files themselves, two independent readers, and DesignCraft's engine.
+depend on a copy of it being available (Derek, 2026-11-16). We make no Publisher renders ourselves. The
+references are the files themselves, two independent readers, DesignCraft's engine and, for one public
+set, Publisher's own exports made by someone else.
 
-- **Files:** real-world `.pub` files contributed with permission, plus the 22 public test files from the
-  NiftyDesign and Pubwork repositories as the development set. Real files can carry real names and
-  contact details, so they are **never committed**. The harness reads them from a directory given on the
-  command line, and `gate/` keeps only each file's SHA-256, a neutral label, and its results.
+- **Files:** real-world `.pub` files contributed with permission, plus two public development sets:
+  - the 22 test files from the NiftyDesign and Pubwork repositories;
+  - **pubsmith's 142 fixtures** (`FuncularLabs/pubsmith`, `tests/fixtures/pub/`, pinned at
+    `0ccdf27fc3f381f0897515e226ea485165c699b2`). They were made with Publisher by that project's scripts
+    and ship with Publisher's layout export of each file (`truth/*.json`) and a few renders (`golden/`).
+    Their notices say the files carry Microsoft material outside pubsmith's MIT licence, so they are
+    fetched at the pin into a gitignored folder, **never vendored**. Their truth JSON is used to score
+    imports, never to work out the file format (the same rule NiftyDesign follows).
+
+  Real files can carry real names and contact details, so they are **never committed**. The harness
+  reads them from a directory given on the command line, and `gate/` keeps only each file's SHA-256, a
+  neutral label, and its results.
 - **Per file, `cargo xtask gate <dir>` records:**
   1. *Opens:* `foliolum-pub` imports it without error.
   2. *Complete:* page count, page size, and per-page text, picture and shape counts match the Pubwork
