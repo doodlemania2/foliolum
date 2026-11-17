@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Makes Foliolum's Phase 1 gate corpus: bulletin-style Microsoft Publisher files, each with Publisher's own
   PDF of it as the reference rendering.
@@ -18,6 +18,9 @@
   and finally foliolum-corpus.zip next to that folder, with its SHA-256 printed.
 
   It is safe to run again: files that already exist are kept unless -Force is given, and the zip is rebuilt.
+  Saved as UTF-8 with a BOM: Windows PowerShell 5.1 reads BOM-less files as ANSI, and the curly quotes and
+  dashes in the sample text then break the parse. Keep the BOM when editing.
+
   All content is invented. Names are fictional, phone numbers are 555-01xx, and addresses are example.org.
 
 .PARAMETER Count
