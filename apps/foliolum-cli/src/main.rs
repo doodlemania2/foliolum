@@ -11,6 +11,7 @@ use std::process::ExitCode;
 const USAGE: &str = "usage: foliolum-cli convert IN.pub OUT.pdf | inspect IN.pub";
 
 fn main() -> ExitCode {
+    foliolum_fonts::install(designcraft_fonts::FontDb::global());
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
         ["convert", input, output] => convert(input, Some(output)),
@@ -31,6 +32,8 @@ fn convert(input: &str, output: Option<&str>) -> ExitCode {
         Ok(i) => i,
         Err(e) => return report(input, "import-failed", json!({ "error": e.to_string() }), 2),
     };
+    let families = foliolum_fonts::document_families(&imported.document);
+    foliolum_fonts::register_families(designcraft_fonts::FontDb::global(), families.keys().map(String::as_str));
     let mut objects = 0usize;
     for item in imported.document.spreads.iter().flat_map(|s| &s.items) {
         item.walk(&mut |_| objects += 1);

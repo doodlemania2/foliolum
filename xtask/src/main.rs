@@ -1,6 +1,6 @@
 //! Foliolum's developer tasks. Run through the alias in `.cargo/config.toml`:
 //!
-//!   cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] PATH...
+//!   cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] PATH...
 //!
 //! `gate` runs the Phase 1 gate (see gate.rs) over every .pub file in each PATH (a file or a folder).
 //!   --set NAME      name of this file set; results go to target/gate/NAME/ (default "local")
@@ -9,6 +9,9 @@
 //!   --record        also write gate/results/NAME.md, the table that is committed
 //!   --out DIR       where PDFs, review PNGs and results.json go (default target/gate/NAME)
 //!   --verdicts F    reviewer verdicts by SHA-256 (default gate/verdicts.json)
+//!   --system-fonts  also use the fonts installed on this machine. By default the gate sees only
+//!                   DesignCraft's and Foliolum's bundled fonts, as the browser does, so its results
+//!                   don't depend on the machine that runs it
 //!
 //! Exit codes: 0 every file passes, 1 usage or I/O error, 2 at least one file does not pass.
 mod gate;
@@ -28,17 +31,33 @@ fn main() -> ExitCode {
             }
         },
         _ => {
-            eprintln!("usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] PATH...");
+            eprintln!("usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] PATH...");
             ExitCode::from(1)
         }
     }
 }
+
+/// DesignCraft's switch for a font database without the machine's installed fonts.
+const NO_SYSTEM_FONTS: (&str, &str) = ("DESIGNCRAFT_SYSTEM_FONTS", "0");
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).parent().expect("xtask sits in the repo root").to_path_buf()
 }
 
 fn run_gate(mut args: pico_args::Arguments) -> Result<ExitCode, String> {
+    // The font database reads the environment once, when first used; setting it in-process would
+    // need unsafe code, so run again as a child with it set.
+    if !args.contains("--system-fonts") && std::env::var_os(NO_SYSTEM_FONTS.0).is_none() {
+        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let status = std::process::Command::new(exe)
+            .arg("gate")
+            .args(args.finish())
+            .env(NO_SYSTEM_FONTS.0, NO_SYSTEM_FONTS.1)
+            .status()
+            .map_err(|e| e.to_string())?;
+        return Ok(ExitCode::from(status.code().unwrap_or(1).clamp(0, 255) as u8));
+    }
+    foliolum_fonts::install(designcraft_fonts::FontDb::global());
     let root = root();
     let set: String = args.opt_value_from_str("--set").map_err(|e| e.to_string())?.unwrap_or_else(|| "local".into());
     if !set.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {

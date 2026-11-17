@@ -16,7 +16,6 @@ fn leaves<'a>(it: &'a Item, out: &mut Vec<&'a Item>) {
     }
 }
 
-
 /// Items drawn on document pages: their own and their parents' (Publisher exports master items
 /// on every page).
 fn shown_items(d: &Document) -> Vec<&Item> {

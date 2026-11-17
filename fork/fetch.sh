@@ -55,4 +55,5 @@ else
 fi
 
 "$FORK/sync-workspace.sh" ${1:+"$1"}
+"$ROOT/crates/foliolum-fonts/fetch.sh"
 echo "==> ready: $DEST"

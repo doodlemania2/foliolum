@@ -13,5 +13,7 @@ workspace = true
 
 [dependencies]
 foliolum-pub = { workspace = true }
+foliolum-fonts = { workspace = true }
+designcraft-fonts = { workspace = true }
 designcraft-engine = { workspace = true }
 serde_json = { workspace = true }

@@ -1886,7 +1886,18 @@ name = "foliolum-cli"
 version = "0.1.0"
 dependencies = [
  "designcraft-engine",
+ "designcraft-fonts",
+ "foliolum-fonts",
  "foliolum-pub",
+ "serde_json",
+]
+
+[[package]]
+name = "foliolum-fonts"
+version = "0.1.0"
+dependencies = [
+ "designcraft-doc",
+ "designcraft-fonts",
  "serde_json",
 ]
 
@@ -5372,6 +5383,7 @@ dependencies = [
  "designcraft-fonts",
  "designcraft-geom",
  "designcraft-render",
+ "foliolum-fonts",
  "foliolum-pub",
  "pico-args",
  "serde",

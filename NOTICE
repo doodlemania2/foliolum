@@ -19,3 +19,10 @@ source and license.
 - crates/foliolum-pub: NiftyDesign's Publisher (.pub) importer, Copyright (c) 2026 srt8hellcat2-ui,
   MIT OR Apache-2.0 (https://github.com/srt8hellcat2-ui/niftydesign, crates/pub). Its per-file
   headers are kept; crates/foliolum-pub/ORIGIN.md records the source commit and our changes.
+- crates/foliolum-fonts: embeds open fonts fetched from google/fonts (pinned in
+  crates/foliolum-fonts/fonts.lock, not stored in this repository): Carlito, Caladea, Arimo, Tinos,
+  Cousine, Gelasio, Libre Franklin, EB Garamond, Comic Neue, Questrial, Noto Sans Symbols 2, Roboto
+  Condensed and Dancing Script under the SIL Open Font License 1.1, and Roboto Slab under the Apache
+  License 2.0. Each family's licence text is fetched with it and shipped beside it.
+- xtask/src/truth.rs: the scoring from NiftyDesign's crates/pub/tests/corpus.rs, Copyright (c) 2026
+  srt8hellcat2-ui, MIT OR Apache-2.0.

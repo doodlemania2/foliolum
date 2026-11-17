@@ -28,6 +28,7 @@ designcraft-engine = { path = "upstream/designcraft/crates/engine" }
 designcraft-render = { path = "upstream/designcraft/crates/render" }
 # Ours.
 foliolum-pub = { path = "crates/foliolum-pub" }
+foliolum-fonts = { path = "crates/foliolum-fonts" }
 # Third party.
 cfb = "0.15"
 log = "0.4"

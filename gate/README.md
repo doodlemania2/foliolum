@@ -14,6 +14,11 @@ Each file gets four checks: **opens**, **complete** (against Publisher's layout 
 one), **exports** (the PDF read back: page count and sizes), and **recognizable** (a person's verdict).
 A file passes only when all four pass. A check that can't be made yet is shown as `–` and is never a pass.
 
+The gate uses only DesignCraft's and Foliolum's bundled fonts, as the browser does, so its results don't
+depend on the machine (`--system-fonts` adds the installed ones). `results.jsonl` lists each file's font
+families and what draws them, and the table shows overset: text that doesn't fit its frame and so isn't
+in the PDF. Overset is reported, not failed on, because Publisher files can hold overset text themselves.
+
 Output goes to `target/gate/<set>/`: one PDF per file, `<label>/page-NN.png` renders for review,
 `results.jsonl` with every difference found, and `results.md`. `--record` also writes
 `gate/results/<set>.md`, the table that is committed.

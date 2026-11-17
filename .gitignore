@@ -24,3 +24,4 @@ local.settings.json
 
 # Gate files: public dev sets (gate/fetch-fixtures.sh) and review output; never committed
 /fixtures/
+/crates/foliolum-fonts/fonts/

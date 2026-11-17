@@ -30,6 +30,7 @@
       ],
       "sources": [
         "crates/foliolum-pub/**",
+        "crates/foliolum-fonts/**",
         "apps/foliolum-cli/**"
       ]
     }

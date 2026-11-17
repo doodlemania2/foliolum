@@ -63,6 +63,10 @@ pub struct FileResult {
     pub truth: Option<truth::Score>,
     /// Font families the text asks for (characters set in each) and the family that draws them here.
     pub fonts: Vec<FontUse>,
+    /// Characters that don't fit their frames as drawn here, and so are missing from the PDF.
+    /// Reported, not failed on: a Publisher file can hold overset text itself, but a substitute font
+    /// that is wider than the original adds to it.
+    pub overset_chars: Option<usize>,
     /// Every difference the reference comparison found, for the per-file JSON (not the table).
     pub notes: Vec<String>,
 }
@@ -74,19 +78,13 @@ pub struct FontUse {
     pub drawn_with: String,
 }
 
-/// Families set as local overrides on text runs (how the importer writes Publisher's fonts), by
-/// characters set, with the family the font database resolves each to on this machine.
+/// The document's font families (characters set in each), each registered with a substitute if
+/// needed, and the family that draws it here.
 fn font_uses(doc: &designcraft_doc::Document) -> Vec<FontUse> {
-    let mut by_family: std::collections::BTreeMap<String, usize> = Default::default();
-    for story in doc.stories.values() {
-        for (range, cf) in story.runs() {
-            if let Some(f) = serde_json::to_value(&cf.over).ok().and_then(|v| v["fontFamily"].as_str().map(str::to_string)) {
-                *by_family.entry(f).or_default() += story.text.get(range.clone()).map_or(range.len(), |t| t.chars().count());
-            }
-        }
-    }
+    let families = foliolum_fonts::document_families(doc);
     let db = designcraft_fonts::FontDb::global();
-    by_family.into_iter().map(|(family, chars)| FontUse { drawn_with: db.face(&family, "Regular").family.clone(), family, chars }).collect()
+    foliolum_fonts::register_families(db, families.keys().map(String::as_str));
+    families.into_iter().map(|(family, chars)| FontUse { drawn_with: db.face(&family, "Regular").family.clone(), family, chars }).collect()
 }
 
 pub struct Options {
@@ -127,6 +125,7 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
         pass: false,
         truth: None,
         fonts: Vec::new(),
+        overset_chars: None,
         notes: Vec::new(),
     };
     if bytes.is_empty() {
@@ -154,7 +153,8 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
     let sizes: Vec<(f64, f64)> = (0..doc.page_count()).filter_map(|i| doc.page(i).map(|p| (p.width, p.height))).collect();
 
     // 2. Complete, against Publisher's layout export when there is one.
-    let truth_path = path.parent().unwrap_or(Path::new(".")).join("truth").join(format!("{}.json", path.file_stem().unwrap_or_default().to_string_lossy()));
+    let truth_path =
+        path.parent().unwrap_or(Path::new(".")).join("truth").join(format!("{}.json", path.file_stem().unwrap_or_default().to_string_lossy()));
     r.complete = match std::fs::read_to_string(&truth_path).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()) {
         None => Check::Unchecked("no reference for this file".into()),
         Some(t) => {
@@ -180,12 +180,16 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
     let exported = catch_unwind(AssertUnwindSafe(|| {
         let mut session = Session::new();
         session.add_document(DocState::new(doc, None));
-        session.execute("file.exportPdf", &json!({ "path": pdf_path.to_string_lossy() })).map(|_| ()).map_err(|e| e.to_string())
+        let overset: usize = designcraft_engine::cmd::preflight::overset_warnings(&session, None).iter().filter_map(|w| overset_count(w)).sum();
+        session.execute("file.exportPdf", &json!({ "path": pdf_path.to_string_lossy() })).map(|_| overset).map_err(|e| e.to_string())
     }));
     r.exports = match exported {
         Err(p) => Check::Fail(format!("export panicked: {}", panic_text(p))),
         Ok(Err(e)) => Check::Fail(e),
-        Ok(Ok(())) => check_pdf(&pdf_path, &sizes, &opts.out.join(&label)),
+        Ok(Ok(overset)) => {
+            r.overset_chars = Some(overset);
+            check_pdf(&pdf_path, &sizes, &opts.out.join(&label))
+        }
     };
     r.recognizable = if !r.exports.is_pass() {
         Check::Unchecked("nothing to review".into())
@@ -198,6 +202,13 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
     };
     r.pass = [&r.opens, &r.complete, &r.exports, &r.recognizable].iter().all(|c| c.is_pass());
     r
+}
+
+/// The character count in one of DesignCraft's overset warnings: the number before "character(s)".
+fn overset_count(warning: &str) -> Option<usize> {
+    let words: Vec<&str> = warning.split_whitespace().collect();
+    let at = words.iter().position(|w| w.starts_with("character(s)"))?;
+    words.get(at.checked_sub(1)?)?.parse().ok()
 }
 
 /// Reads the exported PDF back, compares its pages with the document, and writes one PNG per page.
@@ -242,13 +253,19 @@ pub fn markdown(set: &str, pin: &str, results: &[FileResult]) -> String {
         count(&|r| r.exports.is_pass()),
         count(&|r| r.recognizable.is_pass()),
     );
-    s += "| File | SHA-256 | Pages | Opens | Complete | Exports | Recognizable | Result |\n|---|---|---|---|---|---|---|---|\n";
+    s += &format!(
+        "Overset (text that doesn't fit its frame, so isn't in the PDF; reported, not failed on): {} characters in {} files.\n\n",
+        results.iter().filter_map(|r| r.overset_chars).sum::<usize>(),
+        count(&|r| r.overset_chars.is_some_and(|n| n > 0)),
+    );
+    s += "| File | SHA-256 | Pages | Overset | Opens | Complete | Exports | Recognizable | Result |\n|---|---|---|---|---|---|---|---|---|\n";
     for r in results {
         s += &format!(
-            "| {} | `{}` | {} | {} | {} | {} | {} | {} |\n",
+            "| {} | `{}` | {} | {} | {} | {} | {} | {} | {} |\n",
             r.label,
             &r.sha256[..12],
             r.pages.map_or("–".into(), |p| p.to_string()),
+            r.overset_chars.map_or("–".into(), |n| n.to_string()),
             r.opens.cell(),
             r.complete.cell(),
             r.exports.cell(),
@@ -308,6 +325,14 @@ mod tests {
         let sha = sha256_hex(&std::fs::read(HELLO).unwrap());
         let r = run_file(Path::new(HELLO), &opts(&d, json!({ sha: { "verdict": "not-recognizable", "note": "headline cut off" } })));
         assert_eq!(r.recognizable, Check::Fail("headline cut off".into()));
+    }
+
+    #[test]
+    fn overset_warnings_are_counted() {
+        assert_eq!(overset_count("page 2: 37 character(s) of the story in frame 9 do not fit it and are not in the export"), Some(37));
+        assert_eq!(overset_count("the story in frame 4: 12 character(s) do not fit and are not in the export"), Some(12));
+        assert_eq!(overset_count("5 character(s) of a story do not fit their frame and are not in the export"), Some(5));
+        assert_eq!(overset_count("something else"), None);
     }
 
     #[test]

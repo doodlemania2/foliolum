@@ -79,7 +79,32 @@ contributions are on hold.
    `apps/foliolum-web` ships only our own assets. The only credit allowed is the plain-text line
    "based on DesignCraft by the ArtCraft team" (see `NOTICE`).
 
+5. **Fonts: the font database always includes the machine's installed fonts, and its table of
+   replacements for missing families is fixed.** Patch `0001-fonts-embedder-hooks` (done) adds
+   `DESIGNCRAFT_SYSTEM_FONTS=0`, which leaves out installed fonts as a browser does, and
+   `FontDb::add_substitute`, which lets `foliolum-fonts` register its replacements. Both are small and
+   general, so they are good candidates to offer upstream once contributions open.
+
 Expected size of the series in Phase 1: under 5 patches.
+
+## Fonts
+
+Publisher files name Windows and Office fonts. A browser has none of them and we can't ship them, and
+DesignCraft draws a missing family with Source Sans 3, so text reflows and headlines overflow.
+`crates/foliolum-fonts` bundles open fonts (SIL OFL 1.1, Roboto Slab Apache 2.0; fetched by its
+`fetch.sh` from `fonts.lock` at a pinned google/fonts commit, checked by SHA-256, never committed) and
+registers which draws each family:
+
+- **Metric-compatible** where one exists, so lines break where they did in Publisher: Calibri → Carlito,
+  Cambria → Caladea, Arial → Arimo, Times New Roman → Tinos, Courier New → Cousine, Georgia → Gelasio.
+- **Look-alikes** for other common families (Franklin Gothic → Libre Franklin, Garamond → EB Garamond,
+  Comic Sans → Comic Neue, Century Gothic → Questrial, Rockwell → Roboto Slab).
+- **A guess from the name** for anything else (condensed, script, slab, monospaced or serif), registered
+  per document when it opens; plain sans names keep Source Sans 3.
+
+Symbol fonts are handled in the importer: a Wingdings or Symbol bullet becomes the Unicode character it
+draws (`crates/foliolum-pub/src/symbols.rs`). The gate runs without installed fonts by default and lists
+each file's families and what draws them, plus how much text doesn't fit its frame (overset).
 
 ## .pub import
 
@@ -168,5 +193,6 @@ Local builds on the shared m4 Mac: `nice -n 15`, `CARGO_BUILD_JOBS=4`, one build
 ## Licensing
 
 This repo is **MIT OR Apache-2.0** (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`), the same as
-DesignCraft and NiftyDesign. Pubwork-derived files, if we use them, stay MPL-2.0 in their own
+DesignCraft and NiftyDesign. The fonts `foliolum-fonts` embeds keep their own licences (OFL 1.1;
+Roboto Slab Apache 2.0), which ship beside them. Pubwork-derived files, if we use them, stay MPL-2.0 in their own
 directory with their notices.

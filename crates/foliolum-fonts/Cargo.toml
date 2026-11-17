@@ -1,0 +1,18 @@
+[package]
+name = "foliolum-fonts"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "The open fonts Foliolum bundles, and which draws each Office font a Publisher file names"
+# The crate's code is MIT OR Apache-2.0. The font files it embeds (fetched into fonts/ by fetch.sh)
+# are SIL Open Font License 1.1, with their licence texts beside them; see NOTICE.
+
+[lints]
+workspace = true
+
+[dependencies]
+designcraft-fonts = { workspace = true }
+designcraft-doc = { workspace = true }
+serde_json = { workspace = true }
