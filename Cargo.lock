@@ -5363,6 +5363,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9440ea3e5aeabb0ac63af70daf835274065238cdd0cec83418f417eae38bacee"
 
 [[package]]
+name = "xtask"
+version = "0.1.0"
+dependencies = [
+ "designcraft-color",
+ "designcraft-doc",
+ "designcraft-engine",
+ "designcraft-geom",
+ "designcraft-render",
+ "foliolum-pub",
+ "pico-args",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "yansi"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

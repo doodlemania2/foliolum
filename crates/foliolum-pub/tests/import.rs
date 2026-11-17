@@ -166,8 +166,9 @@ fn wmf_pictures_import_as_vector_svg() {
     let Content::Graphic(g) = &pic.content else { panic!("not a picture: {:?}", pic.content) };
     let asset = d.assets.get(&g.asset).unwrap();
     assert_eq!(asset.mime, "image/svg+xml");
-    assert!(designcraft_images::svg_tree(&asset.data).is_some());
-    let svg = String::from_utf8(asset.data.to_vec()).unwrap();
+    let bytes = asset.data.embedded_bytes().expect("the picture is embedded");
+    assert!(designcraft_images::svg_tree(bytes).is_some());
+    let svg = String::from_utf8(bytes.to_vec()).unwrap();
     assert!(svg.contains("fill=\"#ff0000\"") && svg.contains("fill=\"#0000ff\""), "{svg}");
 }
 

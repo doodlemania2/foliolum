@@ -1,25 +1,12 @@
 // Copyright (c) 2026 srt8hellcat2-ui. SPDX-License-Identifier: MIT OR Apache-2.0
-//! Genuine Publisher files are not redistributable, so they are never committed: point
-//! `PUB_CORPUS` at local folders of `.pub` files (`:`-separated). A folder may hold Publisher's own
-//! layout exports in `truth/<name>.json` (FuncularLabs/pubsmith fixtures), which the report
-//! compares against (the save/reopen/PDF pass is `crates/engine/tests/pub_corpus.rs`). Run: `PUB_CORPUS=dir1:dir2 cargo test -p designcraft-pub --test corpus -- --ignored --nocapture`.
-
-use std::path::{Path, PathBuf};
+// Moved from NiftyDesign's crates/pub/tests/corpus.rs (see crates/foliolum-pub/ORIGIN.md); the scoring is
+// unchanged, only its entry points are public so the gate can call it.
+//! Scores an imported document against Publisher's own layout export of the same file
+//! (`truth/<name>.json`, as shipped with FuncularLabs/pubsmith's fixtures). The export is used only to
+//! score, never to work out the file format.
 
 use designcraft_doc::{Content, Document, Item, ItemId, SpreadRef};
 use designcraft_geom::{Affine, Rect};
-
-fn corpus() -> Vec<PathBuf> {
-    let dirs = std::env::var("PUB_CORPUS").expect("set PUB_CORPUS to folders of .pub files");
-    let mut v: Vec<PathBuf> = dirs
-        .split(':')
-        .filter(|d| !d.is_empty())
-        .flat_map(|d| std::fs::read_dir(d).into_iter().flatten().flatten().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("pub")))
-        .collect();
-    v.sort();
-    v
-}
 
 /// Leaf items: group members instead of their groups (Publisher's layout export lists members).
 fn leaves<'a>(it: &'a Item, out: &mut Vec<&'a Item>) {
@@ -29,15 +16,6 @@ fn leaves<'a>(it: &'a Item, out: &mut Vec<&'a Item>) {
     }
 }
 
-fn items(d: &Document) -> Vec<&Item> {
-    let mut out = Vec::new();
-    for sp in &d.spreads {
-        for it in &sp.items {
-            leaves(it, &mut out);
-        }
-    }
-    out
-}
 
 /// Items drawn on document pages: their own and their parents' (Publisher exports master items
 /// on every page).
@@ -56,19 +34,19 @@ fn story_text(d: &Document, it: &Item) -> Option<String> {
     d.stories.get(&t.story).map(|s| s.text.clone())
 }
 
-#[derive(Default)]
-struct Score {
-    elements: usize,
-    found: usize,
-    geometry_ok: usize,
-    geometry_total: usize,
-    picture_total: usize,
-    picture_ok: usize,
-    picture_unmatched: usize,
-    text_ok: usize,
-    text_total: usize,
-    style_checked: usize,
-    style_ok: usize,
+#[derive(Default, Clone, Debug, serde::Serialize)]
+pub struct Score {
+    pub elements: usize,
+    pub found: usize,
+    pub geometry_ok: usize,
+    pub geometry_total: usize,
+    pub picture_total: usize,
+    pub picture_ok: usize,
+    pub picture_unmatched: usize,
+    pub text_ok: usize,
+    pub text_total: usize,
+    pub style_checked: usize,
+    pub style_ok: usize,
 }
 
 #[derive(Clone, Copy)]
@@ -169,7 +147,7 @@ fn swatch_hex(d: &Document, name: &str) -> Option<String> {
 
 /// Preserve the historical shape/text checks and overlap coverage; separately compare
 /// image-labelled exports with one-to-one picture candidates in painted placed-frame bounds.
-fn score(d: &Document, truth: &serde_json::Value, s: &mut Score, notes: &mut Vec<String>) {
+pub fn score(d: &Document, truth: &serde_json::Value, s: &mut Score, notes: &mut Vec<String>) {
     let Some(pages) = truth["pages"].as_array() else { return };
     if pages.len() != d.page_count() {
         notes.push(format!("pages {} vs truth {}", d.page_count(), pages.len()));
@@ -333,101 +311,8 @@ fn score(d: &Document, truth: &serde_json::Value, s: &mut Score, notes: &mut Vec
     }
 }
 
-#[test]
-#[ignore = "needs PUB_CORPUS: genuine Publisher files are not redistributable"]
-fn corpus_import_report_nfty_8c51ad1b() {
-    let files = corpus();
-    assert!(!files.is_empty(), "no .pub files in PUB_CORPUS");
-    let (mut ok, mut failed) = (0, 0);
-    let mut total = Score::default();
-    let mut note_counts: std::collections::BTreeMap<String, usize> = Default::default();
-    let mut warning_counts: std::collections::BTreeMap<String, usize> = Default::default();
-    for f in &files {
-        let name = f.file_name().unwrap().to_string_lossy().to_string();
-        let bytes = std::fs::read(f).unwrap();
-        match foliolum_pub::import_pub(&bytes) {
-            Err(e) => {
-                failed += 1;
-                println!("FAIL  {name}: {e}");
-            }
-            Ok(imp) => {
-                ok += 1;
-                let d = &imp.document;
-                let its = items(d);
-                let texts = its.iter().filter(|i| i.is_text_frame()).count();
-                let pics = its.iter().filter(|i| matches!(i.content, Content::Graphic(_))).count();
-                let mut line = format!(
-                    "OK    {name}: pages {} items {} (text {texts}, pictures {pics}) warnings {}",
-                    d.page_count(),
-                    its.len(),
-                    imp.warnings.len()
-                );
-                for note in &imp.notes {
-                    *note_counts.entry(note.clone()).or_default() += 1;
-                }
-                for w in &imp.warnings {
-                    *warning_counts.entry(w.clone()).or_default() += 1;
-                }
-                let truth = f.parent().unwrap_or(Path::new(".")).join("truth").join(name.replace(".pub", ".json"));
-                if let Ok(t) = std::fs::read_to_string(&truth) {
-                    let mut s = Score::default();
-                    let mut notes = Vec::new();
-                    score(d, &serde_json::from_str(&t).unwrap(), &mut s, &mut notes);
-                    line += &format!(
-                        " | truth: found {}/{} geometry {} text {}/{} style {}/{}",
-                        s.found, s.elements, s.geometry_ok, s.text_ok, s.text_total, s.style_ok, s.style_checked
-                    );
-                    if !notes.is_empty() {
-                        line += &format!(" [{}]", notes.join("; "));
-                    }
-                    total.elements += s.elements;
-                    total.found += s.found;
-                    total.geometry_ok += s.geometry_ok;
-                    total.geometry_total += s.geometry_total;
-                    total.picture_total += s.picture_total;
-                    total.picture_ok += s.picture_ok;
-                    total.picture_unmatched += s.picture_unmatched;
-                    total.text_ok += s.text_ok;
-                    total.text_total += s.text_total;
-                    total.style_ok += s.style_ok;
-                    total.style_checked += s.style_checked;
-                }
-                if std::env::var_os("PUB_VERBOSE").is_some() {
-                    for w in &imp.warnings {
-                        line += &format!("\n      - {w}");
-                    }
-                }
-                println!("{line}");
-            }
-        }
-    }
-    println!(
-        "SUMMARY files {} imported {ok} failed {failed}; truth elements {} found {} geometry-within-1pt {} text exact {}/{} styling {}/{}",
-        files.len(),
-        total.elements,
-        total.found,
-        total.geometry_ok,
-        total.text_ok,
-        total.text_total,
-        total.style_ok,
-        total.style_checked
-    );
-    println!("POSITIONS shapes/text: {} of {} scored objects within 1 pt", total.geometry_ok, total.geometry_total);
-    println!(
-        "POSITIONS pictures: {} of {} pictures within 1 pt; {} unmatched (reference image elements; imported pictures only; informational)",
-        total.picture_ok, total.picture_total, total.picture_unmatched
-    );
-    println!("COVERAGE legacy found totals above measure overlap, not one-to-one picture matches.");
-    for (note, n) in note_counts {
-        println!("NOTE  {n:4}× {note}");
-    }
-    for (w, n) in warning_counts {
-        println!("WARN  {n:4}× {w}");
-    }
-}
-
 #[cfg(test)]
-mod picture_tests {
+mod tests {
     use super::*;
     use designcraft_doc::{AssetId, Fill, Graphic, LayerId, Shape, Stroke, build::NewDocument};
     use designcraft_geom::shapes;

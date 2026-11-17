@@ -15,4 +15,8 @@ or pubsmith source was read). That claim is self-reported; see `docs/spike-repor
 - Two lines of API drift fixed for DesignCraft after v0.18.0: picture bytes are now
   `designcraft_doc::AssetData::embedded(..)` instead of `Arc::new(..)`.
 
+- `tests/corpus.rs` (the opt-in report over a folder of real files) moved to `xtask/src/truth.rs`, where the
+  gate uses its scoring against Publisher's layout exports. The scoring is unchanged; its entry points are
+  public and the old report wrapper is gone (`cargo xtask gate` replaces it).
+
 Further changes are recorded here as they are made.

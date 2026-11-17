@@ -2,7 +2,7 @@
 # upstream/designcraft (fork/fetch.sh), and our crates depend on its crates by path.
 [workspace]
 resolver = "3"
-members = ["crates/*", "apps/*"]
+members = ["crates/*", "apps/*", "xtask"]
 # DesignCraft has its own workspace; path deps inside our directory would otherwise join ours.
 exclude = ["upstream"]
 
@@ -24,13 +24,17 @@ designcraft-doc = { path = "upstream/designcraft/crates/doc" }
 designcraft-compose = { path = "upstream/designcraft/crates/compose" }
 designcraft-images = { path = "upstream/designcraft/crates/images" }
 designcraft-engine = { path = "upstream/designcraft/crates/engine" }
+designcraft-render = { path = "upstream/designcraft/crates/render" }
 # Ours.
 foliolum-pub = { path = "crates/foliolum-pub" }
 # Third party.
 cfb = "0.15"
 log = "0.4"
 miniz_oxide = "0.8"
+pico-args = "0.5"
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
+sha2 = "0.10"
 thiserror = "2"
 
 # >>> synced from upstream (fork/sync-workspace.sh; do not edit)
