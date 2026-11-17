@@ -102,6 +102,26 @@ MPL-2.0, 494 KB `.wasm`).
 Stock libmspub 0.1.5 is **not** an option on its own. It returned zero pages, with exit code 0, for
 the two most realistic test files.
 
+## The Phase 1 gate
+
+Microsoft Publisher is **not** part of the toolchain: it is out of support, and nothing in Foliolum may
+depend on a copy of it being available (Derek, 2026-11-16). There are no Publisher-made reference
+renders. The references are the files themselves, two independent readers, and DesignCraft's engine.
+
+- **Files:** real-world `.pub` files contributed with permission, plus the 22 public test files from the
+  NiftyDesign and Pubwork repositories as the development set. Real files can carry real names and
+  contact details, so they are **never committed**. The harness reads them from a directory given on the
+  command line, and `gate/` keeps only each file's SHA-256, a neutral label, and its results.
+- **Per file, `cargo xtask gate <dir>` records:**
+  1. *Opens:* `foliolum-pub` imports it without error.
+  2. *Complete:* page count, page size, and per-page text, picture and shape counts match the Pubwork
+     reader (text compared after whitespace normalisation). Any difference is listed, not averaged away.
+  3. *Exports:* DesignCraft writes a print PDF whose page count and sizes match the import.
+  4. *Recognizable:* a per-page PNG is rendered for review, and the reviewer's verdict is stored with the
+     file's hash. This is the one judgement a machine does not make.
+- **Pass** means all four. The gate's result is the table, not a single number: a file that opens but
+  loses text is a fail with its reason.
+
 ## Adopting upstream (fork-sync)
 
 - **Derek merges every adoption.** The `fork-sync` skill is run weekly, or when Derek asks.
@@ -113,7 +133,7 @@ the two most realistic test files.
   - Re-applies the patch series (`git apply --3way`), fixes what no longer applies, and regenerates the
     patches and `SHA256SUMS`.
   - Copies upstream's `[patch.crates-io]` block and profiles into our `Cargo.toml`.
-  - Builds native and wasm, runs the gate corpus, and opens one PR with the results.
+  - Builds native and wasm, runs the gate, and opens one PR with the results.
 - **Drift measured in the spike:** NiftyDesign's importer was written against v0.18.0. Lifted onto
   upstream `main` 813 commits later, it failed to compile in **2 places**, both the same API change.
   Weekly syncs should usually cost minutes.
