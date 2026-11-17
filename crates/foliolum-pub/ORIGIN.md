@@ -18,5 +18,8 @@ or pubsmith source was read). That claim is self-reported; see `docs/spike-repor
 - `tests/corpus.rs` (the opt-in report over a folder of real files) moved to `xtask/src/truth.rs`, where the
   gate uses its scoring against Publisher's layout exports. The scoring is unchanged; its entry points are
   public and the old report wrapper is gone (`cargo xtask gate` replaces it).
+- `src/symbols.rs` (ours): a bullet set in Wingdings or Symbol becomes the Unicode character it draws
+  (Wingdings "l" → ●), set in the paragraph's font, instead of a code no browser font draws as intended.
+  Called from the bullet code in `lib.rs`, marked "Foliolum:". Text runs in symbol fonts are not mapped yet.
 
 Further changes are recorded here as they are made.

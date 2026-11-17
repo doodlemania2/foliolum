@@ -49,6 +49,7 @@ mod paths;
 mod presets;
 mod quill;
 mod read;
+mod symbols;
 mod tables;
 mod wordart;
 
@@ -1116,11 +1117,16 @@ impl<'a> Builder<'a> {
             }
             if let Some(bullet) = style.bullet.as_ref().or(defaults_p.bullet.as_ref()) {
                 ops.push(("listType", json!("bullets")));
+                let font = bullet.font.or_else(|| defaults_p.bullet.as_ref().and_then(|b| b.font)).and_then(|f| self.q.fonts.get(f as usize));
+                // Foliolum: a symbol font's bullet code becomes the Unicode character it draws, set in
+                // the paragraph's own font (see symbols.rs).
+                let mut symbol = false;
                 if let Some(character) = bullet.character.or_else(|| defaults_p.bullet.as_ref().and_then(|b| b.character)) {
+                    let (character, mapped) = symbols::bullet(font.map(String::as_str), character);
+                    symbol = mapped;
                     ops.push(("bulletChar", json!(character.to_string())));
                 }
-                if let Some(font) = bullet.font.or_else(|| defaults_p.bullet.as_ref().and_then(|b| b.font)).and_then(|f| self.q.fonts.get(f as usize))
-                {
+                if let Some(font) = font.filter(|_| !symbol) {
                     ops.push(("bulletFont", json!(font)));
                 }
             }

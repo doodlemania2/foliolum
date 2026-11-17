@@ -25,8 +25,9 @@ fn imports_bullet_descriptor_font_character_and_hanging_indent() {
     assert_eq!(story.text, "One\nTwo");
     for p in &story.paras {
         assert_eq!(p.para.list_type, Some(ListType::Bullets));
-        assert_eq!(p.para.bullet_char.as_deref(), Some("\u{b7}"));
-        assert_eq!(p.para.bullet_font.as_deref(), Some("Symbol"));
+        // Foliolum: a Symbol-font bullet becomes the Unicode bullet it draws (src/symbols.rs).
+        assert_eq!(p.para.bullet_char.as_deref(), Some("\u{2022}"));
+        assert_eq!(p.para.bullet_font.as_deref(), None);
         assert_eq!(p.para.first_line_indent, Some(-18.0));
         assert_eq!(p.para.left_indent, Some(18.0));
     }
@@ -93,8 +94,9 @@ fn observed_real_paragraph_fixtures_match_the_documented_settings() {
     let bullets = load("text__bullets");
     let p = &bullets.document.stories.values().next().unwrap().paras[0].para;
     assert_eq!(p.list_type, Some(ListType::Bullets));
-    assert_eq!(p.bullet_char.as_deref(), Some("\u{b7}"));
-    assert_eq!(p.bullet_font.as_deref(), Some("Symbol"));
+    // Foliolum: a Symbol-font bullet becomes the Unicode bullet it draws (src/symbols.rs).
+    assert_eq!(p.bullet_char.as_deref(), Some("\u{2022}"));
+    assert_eq!(p.bullet_font.as_deref(), None);
     assert_eq!(p.left_indent, Some(18.0));
     assert_eq!(p.first_line_indent, Some(-18.0));
     for (name, leading, factor) in [
