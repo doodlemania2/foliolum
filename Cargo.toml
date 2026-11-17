@@ -23,6 +23,7 @@ designcraft-color = { path = "upstream/designcraft/crates/color" }
 designcraft-doc = { path = "upstream/designcraft/crates/doc" }
 designcraft-compose = { path = "upstream/designcraft/crates/compose" }
 designcraft-images = { path = "upstream/designcraft/crates/images" }
+designcraft-fonts = { path = "upstream/designcraft/crates/fonts" }
 designcraft-engine = { path = "upstream/designcraft/crates/engine" }
 designcraft-render = { path = "upstream/designcraft/crates/render" }
 # Ours.

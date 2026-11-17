@@ -61,8 +61,32 @@ pub struct FileResult {
     pub recognizable: Check,
     pub pass: bool,
     pub truth: Option<truth::Score>,
+    /// Font families the text asks for (characters set in each) and the family that draws them here.
+    pub fonts: Vec<FontUse>,
     /// Every difference the reference comparison found, for the per-file JSON (not the table).
     pub notes: Vec<String>,
+}
+
+#[derive(Serialize, Debug, Clone)]
+pub struct FontUse {
+    pub family: String,
+    pub chars: usize,
+    pub drawn_with: String,
+}
+
+/// Families set as local overrides on text runs (how the importer writes Publisher's fonts), by
+/// characters set, with the family the font database resolves each to on this machine.
+fn font_uses(doc: &designcraft_doc::Document) -> Vec<FontUse> {
+    let mut by_family: std::collections::BTreeMap<String, usize> = Default::default();
+    for story in doc.stories.values() {
+        for (range, cf) in story.runs() {
+            if let Some(f) = serde_json::to_value(&cf.over).ok().and_then(|v| v["fontFamily"].as_str().map(str::to_string)) {
+                *by_family.entry(f).or_default() += story.text.get(range.clone()).map_or(range.len(), |t| t.chars().count());
+            }
+        }
+    }
+    let db = designcraft_fonts::FontDb::global();
+    by_family.into_iter().map(|(family, chars)| FontUse { drawn_with: db.face(&family, "Regular").family.clone(), family, chars }).collect()
 }
 
 pub struct Options {
@@ -102,6 +126,7 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
         recognizable: Check::Unchecked("did not open".into()),
         pass: false,
         truth: None,
+        fonts: Vec::new(),
         notes: Vec::new(),
     };
     if bytes.is_empty() {
@@ -125,6 +150,7 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
     let doc = imported.document;
     r.pages = Some(doc.page_count());
     r.warnings = imported.warnings.len();
+    r.fonts = font_uses(&doc);
     let sizes: Vec<(f64, f64)> = (0..doc.page_count()).filter_map(|i| doc.page(i).map(|p| (p.width, p.height))).collect();
 
     // 2. Complete, against Publisher's layout export when there is one.

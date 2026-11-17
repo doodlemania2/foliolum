@@ -5369,6 +5369,7 @@ dependencies = [
  "designcraft-color",
  "designcraft-doc",
  "designcraft-engine",
+ "designcraft-fonts",
  "designcraft-geom",
  "designcraft-render",
  "foliolum-pub",
