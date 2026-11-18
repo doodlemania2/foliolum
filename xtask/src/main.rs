@@ -1,6 +1,6 @@
 //! Foliolum's developer tasks. Run through the alias in `.cargo/config.toml`:
 //!
-//!   cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] PATH...
+//!   cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH...
 //!
 //! `gate` runs the Phase 1 gate (see gate.rs) over every .pub file in each PATH (a file or a folder).
 //!   --set NAME      name of this file set; results go to target/gate/NAME/ (default "local")
@@ -12,6 +12,8 @@
 //!   --system-fonts  also use the fonts installed on this machine. By default the gate sees only
 //!                   DesignCraft's and Foliolum's bundled fonts, as the browser does, so its results
 //!                   don't depend on the machine that runs it
+//!   --no-review     exit by the machine checks alone (opens, complete, exports), not the reviewer's
+//!                   verdict. For CI on the public dev sets; the table still shows every check
 //!
 //! Exit codes: 0 every file passes, 1 usage or I/O error, 2 at least one file does not pass.
 mod gate;
@@ -31,7 +33,9 @@ fn main() -> ExitCode {
             }
         },
         _ => {
-            eprintln!("usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] PATH...");
+            eprintln!(
+                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH..."
+            );
             ExitCode::from(1)
         }
     }
@@ -65,6 +69,7 @@ fn run_gate(mut args: pico_args::Arguments) -> Result<ExitCode, String> {
     }
     let names = args.contains("--names");
     let record = args.contains("--record");
+    let no_review = args.contains("--no-review");
     let out: PathBuf = args.opt_value_from_str("--out").map_err(|e| e.to_string())?.unwrap_or_else(|| root.join("target/gate").join(&set));
     let verdicts_path: PathBuf = args.opt_value_from_str("--verdicts").map_err(|e| e.to_string())?.unwrap_or_else(|| root.join("gate/verdicts.json"));
     let paths: Vec<PathBuf> = args.finish().into_iter().map(PathBuf::from).collect();
@@ -121,6 +126,14 @@ fn run_gate(mut args: pico_args::Arguments) -> Result<ExitCode, String> {
     }
     let passed = results.iter().filter(|r| r.pass).count();
     println!("{passed} of {} pass; table: {}", results.len(), out.join("results.md").display());
+    if no_review {
+        let machine = results.iter().filter(|r| r.machine_checks_pass()).count();
+        println!("{machine} of {} pass the machine checks (opens, complete, exports)", results.len());
+        for r in results.iter().filter(|r| !r.machine_checks_pass()) {
+            eprintln!("machine checks fail: {}", r.label);
+        }
+        return Ok(if machine == results.len() { ExitCode::SUCCESS } else { ExitCode::from(2) });
+    }
     Ok(if passed == results.len() { ExitCode::SUCCESS } else { ExitCode::from(2) })
 }
 

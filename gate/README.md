@@ -14,6 +14,10 @@ Each file gets four checks: **opens**, **complete** (against Publisher's layout 
 one), **exports** (the PDF read back: page count and sizes), and **recognizable** (a person's verdict).
 A file passes only when all four pass. A check that can't be made yet is shown as `–` and is never a pass.
 
+CI runs `cargo xtask gate --set pubsmith --names --no-review fixtures/pubsmith`: `--no-review` sets the
+exit code by the three machine checks alone, since only a person can give the fourth, and every pubsmith
+file must pass them. The table still shows all four.
+
 The gate uses only DesignCraft's and Foliolum's bundled fonts, as the browser does, so its results don't
 depend on the machine (`--system-fonts` adds the installed ones). `results.jsonl` lists each file's font
 families and what draws them, and the table shows overset: text that doesn't fit its frame and so isn't

@@ -104,6 +104,15 @@ fn panic_text(p: Box<dyn std::any::Any + Send>) -> String {
     p.downcast_ref::<&str>().map(|s| s.to_string()).or_else(|| p.downcast_ref::<String>().cloned()).unwrap_or_else(|| "panic".into())
 }
 
+impl FileResult {
+    /// Opens, complete and exports all pass: everything but the reviewer's verdict. This is what CI
+    /// holds every public dev file to, since a person, not a machine, says whether a page is
+    /// recognizable. An unchecked completeness (no reference) is not a pass here either.
+    pub fn machine_checks_pass(&self) -> bool {
+        self.opens.is_pass() && self.complete.is_pass() && self.exports.is_pass()
+    }
+}
+
 pub fn run_file(path: &Path, opts: &Options) -> FileResult {
     let bytes = std::fs::read(path).unwrap_or_default();
     let sha256 = sha256_hex(&bytes);
@@ -312,6 +321,7 @@ mod tests {
         assert!(matches!(r.complete, Check::Unchecked(_)));
         assert!(matches!(r.recognizable, Check::Unchecked(_)));
         assert!(!r.pass);
+        assert!(!r.machine_checks_pass(), "no reference: completeness is unchecked, so not a pass");
         assert!(d.join("hello/page-01.png").exists());
         // A reviewer's yes alone does not make it pass while completeness is unchecked.
         let r = run_file(Path::new(HELLO), &opts(&d, json!({ r.sha256.clone(): { "verdict": "recognizable" } })));
