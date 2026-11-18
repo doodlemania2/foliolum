@@ -75,9 +75,11 @@ contributions are on hold.
    crate wherever the types allow.
 3. **The web build has no control channel or MCP.** The AI phases need one. That is a later patch and
    is out of scope for Phase 1.
-4. **ArtCraft brand assets are trademarks and not open source** (`docs/brand/LICENSE-brand.txt`).
-   `apps/foliolum-web` ships only our own assets. The only credit allowed is the plain-text line
-   "based on DesignCraft by the ArtCraft team" (see `NOTICE`).
+4. **ArtCraft brand assets are trademarks and not open source** (`docs/brand/LICENSE-brand.txt`), and
+   DesignCraft's UI hardcodes them (About, start screen, app bar, Help menu). Patch
+   `0002-ui-embedder-brand` (done) lets Foliolum set its own name, credit line and links, hides the
+   ArtCraft community, and compiles the mark's artwork out (`artcraft-brand` feature off). The only
+   credit we give is the plain-text line "based on DesignCraft by the ArtCraft team" (see `NOTICE`).
 
 5. **Fonts: the font database always includes the machine's installed fonts, and its table of
    replacements for missing families is fixed.** Patch `0001-fonts-embedder-hooks` (done) adds

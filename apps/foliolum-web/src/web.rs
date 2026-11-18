@@ -37,6 +37,7 @@ const LOADING_ID: &str = "foliolum_loading";
 pub fn start() {
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
     foliolum_fonts::install(designcraft_fonts::FontDb::global());
+    designcraft_ui_egui::brand::set(crate::BRAND);
     wasm_bindgen_futures::spawn_local(async {
         let Some(document) = web_sys::window().and_then(|w| w.document()) else {
             log::error!("no document");

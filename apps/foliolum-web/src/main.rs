@@ -24,6 +24,18 @@ mod graphics;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 mod pub_open;
 
+/// Foliolum's name and links in DesignCraft's UI, in place of the ArtCraft mark and community, which only
+/// DesignCraft may show (fork/patches/0002-ui-embedder-brand.patch).
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+const BRAND: designcraft_ui_egui::brand::Brand = designcraft_ui_egui::brand::Brand {
+    name: "Foliolum",
+    version: env!("CARGO_PKG_VERSION"),
+    tagline: "Page layout for people Publisher left behind: bulletins, newsletters, flyers and programs.",
+    artcraft: false,
+    credit: Some("Based on DesignCraft by the ArtCraft team. Not affiliated with Microsoft."),
+    links: &[("Source code", "https://github.com/doodlemania2/foliolum"), ("Report a problem", "https://github.com/doodlemania2/foliolum/issues")],
+};
+
 #[cfg(target_arch = "wasm32")]
 fn main() {
     web::start();

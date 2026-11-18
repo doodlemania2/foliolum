@@ -26,7 +26,7 @@ designcraft-images = { path = "upstream/designcraft/crates/images" }
 designcraft-fonts = { path = "upstream/designcraft/crates/fonts" }
 designcraft-engine = { path = "upstream/designcraft/crates/engine" }
 designcraft-format = { path = "upstream/designcraft/crates/format" }
-designcraft-ui-egui = { path = "upstream/designcraft/crates/ui-egui" }
+designcraft-ui-egui = { path = "upstream/designcraft/crates/ui-egui", default-features = false }
 designcraft-render = { path = "upstream/designcraft/crates/render" }
 # Ours.
 foliolum-pub = { path = "crates/foliolum-pub" }

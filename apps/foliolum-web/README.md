@@ -28,7 +28,9 @@ On the shared m4: `nice -n 15 env CARGO_BUILD_JOBS=4 trunk build` (about 5 minut
 
 ## Not yet
 
-- DesignCraft's ArtCraft branding (About, start screen, app bar, Help menu) is still in the UI: it must
-  be removed by a patch before any public build (see docs/architecture.md, patch list).
+- Branding: patch 0002 replaces DesignCraft's ArtCraft branding with Foliolum's (checked in Chrome: start
+  screen, title bar, Help menu, About) and the ArtCraft mark isn't in the build. The word "ArtCraft" is
+  still in the wasm about 128 times, in DesignCraft's translation tables and link constants for screens
+  Foliolum no longer shows.
 - DesignCraft highlights text whose named font isn't installed, which marks almost every Publisher file
   even though a substitute draws it.
