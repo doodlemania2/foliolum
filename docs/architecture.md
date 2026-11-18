@@ -181,14 +181,21 @@ set, Publisher's own exports made by someone else.
 | Rust | 1.100.0 stable (2026-11-09) | upstream MSRV 1.95, edition 2024; pinned in `rust-toolchain.toml` |
 | Target | `wasm32-unknown-unknown` | |
 | trunk | 0.22.1 | `cargo install --locked trunk` |
-| wasm-bindgen | 0.2.129 | trunk downloads it; pin it in `Trunk.toml` |
-| wasm-opt | binaryen version_131 | trunk downloads it |
+| wasm-bindgen | 0.2.129 | trunk downloads it; pinned in `apps/foliolum-web/Trunk.toml` |
+| wasm-opt | binaryen version_131 | trunk downloads it; pinned in `Trunk.toml` |
 | Node | 22 | already on the runner; used for the Pubwork reader oracle |
 
-CI runner `doodlemanage-foliolum` (label `tdp-linux`) is a persistent Ubuntu container with 12 cores
-and only Node installed. The first workflow step installs rustup with the pinned toolchain, the wasm32
-target and trunk; `~/.cargo` and `target/` are cached. Emscripten is not needed unless we rebuild the
-libmspub reader; if we do, K3s provides a pinned image.
+CI (`.github/workflows/ci.yml`) runs on `doodlemanage-foliolum` (label `tdp-linux`), a persistent
+Ubuntu container (2 CPUs, 6 GB) with only Node installed. The job installs the Debian packages it needs
+when they are missing (a C compiler, pkg-config, libwayland-dev), then rustup and the toolchain
+`rust-toolchain.toml` names, and trunk. Cargo's home and the target directory stay under `$HOME` between
+runs as the cache. It runs fmt, clippy (native and wasm), the workspace tests, the gate's machine checks
+on the pubsmith set (`cargo xtask gate --no-review`) and the web build.
+
+The repo is public, so CI never runs on `pull_request`: it runs on push to `main` and on
+`workflow_dispatch`, and only for the repository owner. To check a PR branch before merging:
+`gh workflow run ci.yml --ref <branch>`. Emscripten is not needed unless we rebuild the libmspub reader;
+if we do, K3s provides a pinned image.
 
 Local builds on the shared m4 Mac: `nice -n 15`, `CARGO_BUILD_JOBS=4`, one build at a time.
 

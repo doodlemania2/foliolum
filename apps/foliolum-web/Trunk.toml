@@ -9,3 +9,8 @@ release = true
 [serve]
 addresses = ["127.0.0.1"]
 port = 8768
+
+# The tools trunk downloads, pinned so local and CI builds match (docs/architecture.md, "Toolchain").
+[tools]
+wasm_bindgen = "0.2.129"
+wasm_opt = "version_131"
