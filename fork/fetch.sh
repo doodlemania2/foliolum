@@ -45,6 +45,13 @@ if (( ${#patches[@]} )); then
   echo "==> verifying and applying ${#patches[@]} patch(es)"
   if command -v sha256sum >/dev/null; then sum=(sha256sum); else sum=(shasum -a 256); fi
   (cd "$FORK/patches" && "${sum[@]}" --check --strict SHA256SUMS)
+  # --check only verifies the files SHA256SUMS lists: refuse any patch it doesn't.
+  for p in "${patches[@]}"; do
+    if ! grep -qE "^[0-9a-f]{64}  $(basename "$p")\$" "$FORK/patches/SHA256SUMS"; then
+      echo "!! $(basename "$p") is not in fork/patches/SHA256SUMS. Refusing." >&2
+      exit 1
+    fi
+  done
   for p in "${patches[@]}"; do
     echo "    $(basename "$p")"
     git -C "$DEST" apply --check "$p"
