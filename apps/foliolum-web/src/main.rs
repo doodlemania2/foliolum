@@ -36,6 +36,21 @@ const BRAND: designcraft_ui_egui::brand::Brand = designcraft_ui_egui::brand::Bra
     links: &[("Source code", "https://github.com/doodlemania2/foliolum"), ("Report a problem", "https://github.com/doodlemania2/foliolum/issues")],
 };
 
+/// A new editing session with Foliolum's defaults.
+///
+/// DesignCraft highlights text set in a font that isn't installed (Preferences › Composition ›
+/// Highlight › Substituted Fonts). Almost every Publisher file names Office fonts, and in Foliolum
+/// each of them is drawn by a bundled substitute or, failing that, DesignCraft's default sans
+/// ([`foliolum_fonts::register_families`]), so the highlight would mark nearly all the text in a
+/// file that came over correctly. Foliolum starts with it off; the checkbox still turns it on, and
+/// the Preflight panel (Window ▸ Preflight) still lists every substituted font for anyone sending a file to a printer.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+fn new_session() -> designcraft_engine::Session {
+    let mut session = designcraft_engine::Session::new();
+    session.prefs.highlight_substituted_fonts = false;
+    session
+}
+
 #[cfg(target_arch = "wasm32")]
 fn main() {
     web::start();
@@ -44,4 +59,13 @@ fn main() {
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
     eprintln!("foliolum-web only runs in the browser: build it with `trunk build` in apps/foliolum-web");
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn substituted_fonts_are_not_highlighted_by_default() {
+        assert!(designcraft_engine::Session::new().prefs.highlight_substituted_fonts, "DesignCraft's default, which Foliolum changes");
+        assert!(!super::new_session().prefs.highlight_substituted_fonts);
+    }
 }

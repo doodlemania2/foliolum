@@ -26,11 +26,16 @@ On the shared m4: `nice -n 15 env CARGO_BUILD_JOBS=4 trunk build` (about 5 minut
   51.9 MB to 30.3 MB; the data section is 24.8 MB, about 12 MB of it our bundled fonts, which can move to
   on-demand loading.
 
+- Substituted fonts aren't highlighted. DesignCraft puts pink behind text whose named font isn't
+  installed, which marked nearly every line of a Publisher file even though a bundled substitute draws
+  it. Foliolum starts with that preference off (`new_session` in `src/main.rs`); Preferences › Composition
+  can turn it back on, and the Preflight panel still lists every substituted font. Checked in Chrome
+  with the sample newsletter.
+
 ## Not yet
 
 - Branding: patch 0002 replaces DesignCraft's ArtCraft branding with Foliolum's (checked in Chrome: start
   screen, title bar, Help menu, About) and the ArtCraft mark isn't in the build. The word "ArtCraft" is
   still in the wasm about 128 times, in DesignCraft's translation tables and link constants for screens
   Foliolum no longer shows.
-- DesignCraft highlights text whose named font isn't installed, which marks almost every Publisher file
-  even though a substitute draws it.
+- Fonts: about 12 MB of bundled fonts could load on demand instead of sitting in the `.wasm`.

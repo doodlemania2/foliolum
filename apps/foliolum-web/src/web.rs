@@ -77,7 +77,7 @@ pub fn start() {
                         });
                     }
                     let inbox: Inbox = Inbox::default();
-                    let mut app = DesignApp::new(Session::new(), services(inbox.clone(), cc.egui_ctx.clone()));
+                    let mut app = DesignApp::new(crate::new_session(), services(inbox.clone(), cc.egui_ctx.clone()));
                     if has_query_flag(&query(), "sample") {
                         let _ = app.run("file.newSample", serde_json::json!({}));
                     }
