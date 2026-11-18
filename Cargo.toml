@@ -25,12 +25,18 @@ designcraft-compose = { path = "upstream/designcraft/crates/compose" }
 designcraft-images = { path = "upstream/designcraft/crates/images" }
 designcraft-fonts = { path = "upstream/designcraft/crates/fonts" }
 designcraft-engine = { path = "upstream/designcraft/crates/engine" }
+designcraft-format = { path = "upstream/designcraft/crates/format" }
+designcraft-ui-egui = { path = "upstream/designcraft/crates/ui-egui" }
 designcraft-render = { path = "upstream/designcraft/crates/render" }
 # Ours.
 foliolum-pub = { path = "crates/foliolum-pub" }
 foliolum-fonts = { path = "crates/foliolum-fonts" }
 # Third party.
 cfb = "0.15"
+# The UI stack, at DesignCraft's versions (its [patch.crates-io] below points them at its forks).
+egui = "0.37"
+eframe = { version = "0.37", default-features = false }
+rfd = "0.17"
 log = "0.4"
 miniz_oxide = "0.8"
 pico-args = "0.5"
@@ -38,6 +44,16 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"
 thiserror = "2"
+
+# The browser build (apps/foliolum-web/index.html selects it): DesignCraft's release profile is tuned
+# for desktop speed; this one for download size.
+[profile.web]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+# No strip: it removes the target_features section wasm-opt reads (bulk memory), and debug is
+# already 0 from release.
 
 # >>> synced from upstream (fork/sync-workspace.sh; do not edit)
 [profile.dev.package."*"]
