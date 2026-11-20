@@ -69,10 +69,12 @@ contributions are on hold.
 1. **File ▸ Open routing is hardcoded** (`crates/engine/src/cmd/file/open.rs`). We own the web entry
    app, so we try first to turn a .pub into a `Document` before the engine sees it. If that isn't
    clean, it becomes a small patch adding .pub to the open routing.
-2. **Menus, panels and commands are fixed tables.** The Publisher-mode ribbon and menus are a patch to
-   `crates/ui-egui/src/menus/` (and any new commands, to `crates/engine/src/cmd.rs`). We keep the
-   patch narrow: one table switch that selects "Publisher mode", with the tables themselves in our
-   crate wherever the types allow.
+2. **Menus, panels and commands are fixed tables, and `DesignApp::ui` lays out the whole window.**
+   Patch `0003-ui-embedder-shell` (done) adds layout hooks instead of new tables: our bar under the app
+   bar, our strip at the left, our controls in the app bar, and a per-frame choice of DesignCraft's bars.
+   Foliolum's simple editor (`crates/foliolum-shell`) is a ribbon whose buttons run DesignCraft's
+   existing menu commands, tools and panels, plus the Pages panel down the left. A switch goes to the
+   full editor. No new commands so far.
 3. **The web build has no control channel or MCP.** The AI phases need one. That is a later patch and
    is out of scope for Phase 1.
 4. **ArtCraft brand assets are trademarks and not open source** (`docs/brand/LICENSE-brand.txt`), and

@@ -15,7 +15,7 @@ Run `fork/fetch.sh` after cloning this repo and whenever `pins.env` or a patch c
 
 ## The patches
 
-Each patch: what it changes, why it can't live in our own crates, and what would let us drop it. Both are
+Each patch: what it changes, why it can't live in our own crates, and what would let us drop it. All are
 small and general, so they are good candidates to offer upstream once contributions open.
 
 ### 0001-fonts-embedder-hooks
@@ -34,6 +34,18 @@ community, Discord and sibling apps; with the feature off the mark's artwork isn
 Menu separators are drawn only between groups that each show something. DesignCraft's own behaviour is
 unchanged. The brand licence (`docs/brand/LICENSE-brand.txt` upstream) requires a modified version to
 remove the marks, and the UI hardcodes them. Drop it if upstream gains a brand hook.
+
+### 0003-ui-embedder-shell
+
+`crates/ui-egui`: a `shell` module an app built on DesignCraft sets at startup. It holds three hooks,
+drawn as part of the window's layout: under the app bar, at the left edge, and inline in the app bar. It
+also has a per-frame choice of which of DesignCraft's bars to show (menus, workspace menu, Tools panel,
+Control bar). Foliolum's simple editor (`crates/foliolum-shell`: the ribbon and the page strip) draws
+through it. `DesignApp::ui` lays out the whole window in one call, so an embedder can't place a panel
+between the app bar and the canvas from outside. DesignCraft's own window is unchanged. Most of the
+`app_bar.rs` hunk is re-indentation (the workspace menu now sits inside an `if`), so expect that hunk
+to need re-applying by hand when upstream changes the app bar. Drop it if upstream gains embedder layout
+hooks.
 
 ## Upstream test baseline
 
@@ -57,10 +69,17 @@ At pin `47ef1ec` these DesignCraft UI tests already fail on macOS without any of
 ## Editing a patch
 
 1. `fork/fetch.sh` (a clean checkout with the current series applied).
-2. Edit inside `upstream/designcraft`.
-3. `git -C upstream/designcraft diff -- <paths> > fork/patches/NNNN-name.patch` (one concern per patch).
-4. Regenerate the checksums: `(cd fork/patches && shasum -a 256 *.patch > SHA256SUMS)`.
-5. `fork/fetch.sh` again to prove the series applies cleanly from scratch.
+2. Commit that state in the throwaway checkout, as the base for the next patch (fetch.sh resets it to the
+   pin, so the commit never goes anywhere):
+   `git -C upstream/designcraft add -A && git -C upstream/designcraft -c user.name=foliolum -c user.email=foliolum@localhost commit -qm base`.
+   To change an existing patch instead, re-apply the series only up to the one before it.
+3. Edit inside `upstream/designcraft`, and format with upstream's own config:
+   `rustfmt --edition 2024 --config-path upstream/designcraft/rustfmt.toml <files>`.
+4. `git -C upstream/designcraft add -N <new files> && git -C upstream/designcraft diff HEAD > fork/patches/NNNN-name.patch`
+   (one concern per patch; diffing against the base keeps patches apart even where they touch the same file).
+5. Regenerate the checksums: `(cd fork/patches && shasum -a 256 *.patch > SHA256SUMS)`.
+6. `fork/fetch.sh` again to prove the series applies cleanly from scratch, and run DesignCraft's UI tests
+   against the baseline below.
 
 ## Moving the pin
 
