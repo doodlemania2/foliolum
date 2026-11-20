@@ -28,9 +28,11 @@ designcraft-engine = { path = "upstream/designcraft/crates/engine" }
 designcraft-format = { path = "upstream/designcraft/crates/format" }
 designcraft-ui-egui = { path = "upstream/designcraft/crates/ui-egui", default-features = false }
 designcraft-render = { path = "upstream/designcraft/crates/render" }
+designcraft-tools = { path = "upstream/designcraft/crates/tools" }
 # Ours.
 foliolum-pub = { path = "crates/foliolum-pub" }
 foliolum-fonts = { path = "crates/foliolum-fonts" }
+foliolum-shell = { path = "crates/foliolum-shell" }
 # Third party.
 cfb = "0.15"
 # The UI stack, at DesignCraft's versions (its [patch.crates-io] below points them at its forks).

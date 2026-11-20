@@ -1,0 +1,21 @@
+[package]
+name = "foliolum-shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Foliolum's simple editor: a ribbon and a page strip around DesignCraft's editor"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+designcraft-ui-egui = { workspace = true }
+egui = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+designcraft-engine = { workspace = true }
+designcraft-tools = { workspace = true }
