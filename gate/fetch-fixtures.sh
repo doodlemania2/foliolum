@@ -29,5 +29,6 @@ git -C "$CLONE" -c advice.detachedHead=false checkout --quiet --force "$PUBSMITH
 actual="$(git -C "$CLONE" rev-parse HEAD)"
 [[ "$actual" == "$PUBSMITH_COMMIT" ]] || { echo "!! pubsmith is at $actual, expected $PUBSMITH_COMMIT" >&2; exit 1; }
 
-ln -sfn "$CLONE/tests/fixtures/pub" "$DEST"
+# Relative, so the link survives the folder being moved (another worktree, another machine).
+ln -sfn ".pubsmith-src/tests/fixtures/pub" "$DEST"
 echo "==> $(find -L "$DEST" -maxdepth 1 -name '*.pub' | wc -l | tr -d ' ') .pub files, $(find -L "$DEST/truth" -name '*.json' | wc -l | tr -d ' ') truth exports in $DEST"
