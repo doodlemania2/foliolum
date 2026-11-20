@@ -24,7 +24,13 @@ sites live in the private repo `doodlemania2/foliolum-site`.
   when work starts, list the files it lives in under `sources`, and flip it to `ready` only when it works
   on `main`. Only `ready` features appear on the marketing site. `.github/workflows/presence.yml` tells
   foliolum-site to rebuild on every push to `main`.
-- No license is chosen yet. Do not add one.
+- **License: MIT OR Apache-2.0** (Derek, 2026-11-16; `LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`). Third-party
+  code keeps its own license and gets a NOTICE entry.
+- **DesignCraft is pinned, not copied** (the documenso model; `docs/architecture.md`): `fork/pins.env` plus
+  `fork/patches/`, and our code in our own crates. Adopting a newer upstream goes through the `fork-sync` skill
+  and is Derek's call each time. No upstream PRs or comments on `storytold/designcraft` for now.
+- **Never ship ArtCraft marks.** DesignCraft's brand assets are trademarks; credit only in plain text.
+- **Shared m4 Mac:** every build runs at `nice -n 15` with `CARGO_BUILD_JOBS=4`, one at a time.
 
 ## Worktrees
 

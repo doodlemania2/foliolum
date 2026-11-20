@@ -17,3 +17,11 @@ capture/.cache/
 *.p12
 kubeconfig
 local.settings.json
+
+# DesignCraft checkout (fork/fetch.sh) and Rust build output
+/upstream/
+/target/
+
+# Gate files: public dev sets (gate/fetch-fixtures.sh) and review output; never committed
+/fixtures/
+/crates/foliolum-fonts/fonts/

@@ -1,22 +1,38 @@
 {
   "property": "foliolum",
-  "audiences": ["member", "admin", "operator"],
+  "audiences": [
+    "member",
+    "admin",
+    "operator"
+  ],
   "features": [
     {
       "id": "editor",
       "name": "Page editor",
       "status": "building",
       "summary": "Lay out text, pictures and shapes on a page in the browser.",
-      "audiences": ["member"],
-      "sources": ["src/**"]
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "apps/foliolum-web/**",
+        "crates/foliolum-shell/**",
+        "fork/**"
+      ]
     },
     {
       "id": "pub-import",
       "name": "Publisher file import",
       "status": "building",
       "summary": "Open a Microsoft Publisher file and keep working on it.",
-      "audiences": ["member"],
-      "sources": ["src/import/**"]
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "crates/foliolum-pub/**",
+        "crates/foliolum-fonts/**",
+        "apps/foliolum-cli/**"
+      ]
     }
   ]
 }

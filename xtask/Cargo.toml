@@ -1,0 +1,26 @@
+[package]
+name = "xtask"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Foliolum developer tasks: the Phase 1 gate"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+foliolum-pub = { workspace = true }
+foliolum-fonts = { workspace = true }
+designcraft-geom = { workspace = true }
+designcraft-color = { workspace = true }
+designcraft-doc = { workspace = true }
+designcraft-fonts = { workspace = true }
+designcraft-engine = { workspace = true }
+designcraft-render = { workspace = true }
+pico-args = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }

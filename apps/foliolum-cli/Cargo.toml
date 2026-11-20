@@ -1,0 +1,19 @@
+[package]
+name = "foliolum-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Foliolum headless tools: .pub import, PDF export, gate runs"
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+foliolum-pub = { workspace = true }
+foliolum-fonts = { workspace = true }
+designcraft-fonts = { workspace = true }
+designcraft-engine = { workspace = true }
+serde_json = { workspace = true }

@@ -1,0 +1,16 @@
+# Build with: trunk build   (from apps/foliolum-web; index.html selects the size-tuned "web" profile)
+[build]
+target = "index.html"
+dist = "../../dist/web"
+public_url = "./"
+filehash = true
+release = true
+
+[serve]
+addresses = ["127.0.0.1"]
+port = 8768
+
+# The tools trunk downloads, pinned so local and CI builds match (docs/architecture.md, "Toolchain").
+[tools]
+wasm_bindgen = "0.2.129"
+wasm_opt = "version_131"
