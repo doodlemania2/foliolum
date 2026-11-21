@@ -12,6 +12,11 @@ description = "The open fonts Foliolum bundles, and which draws each Office font
 [lints]
 workspace = true
 
+[features]
+# Compile the font files in. The web app turns it off and fetches them instead (see the crate docs).
+default = ["embed"]
+embed = []
+
 [dependencies]
 designcraft-fonts = { workspace = true }
 designcraft-doc = { workspace = true }

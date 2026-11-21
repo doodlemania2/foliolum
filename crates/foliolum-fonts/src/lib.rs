@@ -6,9 +6,12 @@
 //! instead: metric-compatible ones (same advance widths, so the text breaks where it did in
 //! Publisher) where they exist, and close look-alikes otherwise.
 //!
-//! The files are fetched by `fetch.sh` (from `fonts.lock`, checked by SHA-256) and embedded here. All
-//! are SIL Open Font License 1.1 except Roboto Slab (Apache 2.0); each family's licence text ships
-//! beside its fonts (see [`LICENSES`]).
+//! The files are fetched by `fetch.sh` (from `fonts.lock`, checked by SHA-256). With the `embed`
+//! feature (the default: the CLI, the gate and the tests) they are compiled in. The web app turns it
+//! off and fetches them after it starts, from the content-named copies `fetch.sh` writes to `web/`
+//! ([`web_files`]), so they stay out of the wasm and stay cached across deploys. All are SIL Open Font
+//! License 1.1 except Roboto Slab (Apache 2.0); each family's licence text ships beside its fonts
+//! (see [`LICENSES`]).
 //!
 //! A family that is neither installed nor in [`SUBSTITUTES`] gets a guess from its name ([`guess`]):
 //! a condensed name gets a condensed font, a serif name a serif, and so on, registered per document
@@ -16,67 +19,149 @@
 
 use designcraft_fonts::FontDb;
 
-macro_rules! font {
-    ($path:literal) => {
-        ($path, include_bytes!(concat!("../fonts/", $path)) as &[u8])
-    };
-}
-
-/// Every bundled font file, by its path under `fonts/`.
-pub const FONTS: &[(&str, &[u8])] = &[
-    font!("carlito/Carlito-Regular.ttf"),
-    font!("carlito/Carlito-Bold.ttf"),
-    font!("carlito/Carlito-Italic.ttf"),
-    font!("carlito/Carlito-BoldItalic.ttf"),
-    font!("caladea/Caladea-Regular.ttf"),
-    font!("caladea/Caladea-Bold.ttf"),
-    font!("caladea/Caladea-Italic.ttf"),
-    font!("caladea/Caladea-BoldItalic.ttf"),
-    font!("arimo/Arimo[wght].ttf"),
-    font!("arimo/Arimo-Italic[wght].ttf"),
-    font!("tinos/Tinos-Regular.ttf"),
-    font!("tinos/Tinos-Bold.ttf"),
-    font!("tinos/Tinos-Italic.ttf"),
-    font!("tinos/Tinos-BoldItalic.ttf"),
-    font!("cousine/Cousine-Regular.ttf"),
-    font!("cousine/Cousine-Bold.ttf"),
-    font!("cousine/Cousine-Italic.ttf"),
-    font!("cousine/Cousine-BoldItalic.ttf"),
-    font!("gelasio/Gelasio[wght].ttf"),
-    font!("gelasio/Gelasio-Italic[wght].ttf"),
-    font!("librefranklin/LibreFranklin[wght].ttf"),
-    font!("librefranklin/LibreFranklin-Italic[wght].ttf"),
-    font!("ebgaramond/EBGaramond[wght].ttf"),
-    font!("ebgaramond/EBGaramond-Italic[wght].ttf"),
-    font!("comicneue/ComicNeue-Regular.ttf"),
-    font!("comicneue/ComicNeue-Bold.ttf"),
-    font!("comicneue/ComicNeue-Italic.ttf"),
-    font!("comicneue/ComicNeue-BoldItalic.ttf"),
-    font!("questrial/Questrial-Regular.ttf"),
-    font!("notosanssymbols2/NotoSansSymbols2-Regular.ttf"),
-    font!("robotocondensed/RobotoCondensed[wght].ttf"),
-    font!("robotocondensed/RobotoCondensed-Italic[wght].ttf"),
-    font!("robotoslab/RobotoSlab[wght].ttf"),
-    font!("dancingscript/DancingScript[wght].ttf"),
+/// Every bundled font file, by its path under `fonts/` (and in `fonts.lock`).
+pub const FONT_PATHS: &[&str] = &[
+    "carlito/Carlito-Regular.ttf",
+    "carlito/Carlito-Bold.ttf",
+    "carlito/Carlito-Italic.ttf",
+    "carlito/Carlito-BoldItalic.ttf",
+    "caladea/Caladea-Regular.ttf",
+    "caladea/Caladea-Bold.ttf",
+    "caladea/Caladea-Italic.ttf",
+    "caladea/Caladea-BoldItalic.ttf",
+    "arimo/Arimo[wght].ttf",
+    "arimo/Arimo-Italic[wght].ttf",
+    "tinos/Tinos-Regular.ttf",
+    "tinos/Tinos-Bold.ttf",
+    "tinos/Tinos-Italic.ttf",
+    "tinos/Tinos-BoldItalic.ttf",
+    "cousine/Cousine-Regular.ttf",
+    "cousine/Cousine-Bold.ttf",
+    "cousine/Cousine-Italic.ttf",
+    "cousine/Cousine-BoldItalic.ttf",
+    "gelasio/Gelasio[wght].ttf",
+    "gelasio/Gelasio-Italic[wght].ttf",
+    "librefranklin/LibreFranklin[wght].ttf",
+    "librefranklin/LibreFranklin-Italic[wght].ttf",
+    "ebgaramond/EBGaramond[wght].ttf",
+    "ebgaramond/EBGaramond-Italic[wght].ttf",
+    "comicneue/ComicNeue-Regular.ttf",
+    "comicneue/ComicNeue-Bold.ttf",
+    "comicneue/ComicNeue-Italic.ttf",
+    "comicneue/ComicNeue-BoldItalic.ttf",
+    "questrial/Questrial-Regular.ttf",
+    "notosanssymbols2/NotoSansSymbols2-Regular.ttf",
+    "robotocondensed/RobotoCondensed[wght].ttf",
+    "robotocondensed/RobotoCondensed-Italic[wght].ttf",
+    "robotoslab/RobotoSlab[wght].ttf",
+    "dancingscript/DancingScript[wght].ttf",
 ];
 
 /// Each bundled family's licence text, by its path under `fonts/`.
-pub const LICENSES: &[(&str, &[u8])] = &[
-    font!("carlito/OFL.txt"),
-    font!("caladea/OFL.txt"),
-    font!("arimo/OFL.txt"),
-    font!("tinos/OFL.txt"),
-    font!("cousine/OFL.txt"),
-    font!("gelasio/OFL.txt"),
-    font!("librefranklin/OFL.txt"),
-    font!("ebgaramond/OFL.txt"),
-    font!("comicneue/OFL.txt"),
-    font!("questrial/OFL.txt"),
-    font!("notosanssymbols2/OFL.txt"),
-    font!("robotocondensed/OFL.txt"),
-    font!("robotoslab/LICENSE.txt"),
-    font!("dancingscript/OFL.txt"),
+pub const LICENSE_PATHS: &[&str] = &[
+    "carlito/OFL.txt",
+    "caladea/OFL.txt",
+    "arimo/OFL.txt",
+    "tinos/OFL.txt",
+    "cousine/OFL.txt",
+    "gelasio/OFL.txt",
+    "librefranklin/OFL.txt",
+    "ebgaramond/OFL.txt",
+    "comicneue/OFL.txt",
+    "questrial/OFL.txt",
+    "notosanssymbols2/OFL.txt",
+    "robotocondensed/OFL.txt",
+    "robotoslab/LICENSE.txt",
+    "dancingscript/OFL.txt",
 ];
+
+#[cfg(feature = "embed")]
+macro_rules! embedded {
+    ($($path:literal),* $(,)?) => {
+        &[$(($path, include_bytes!(concat!("../fonts/", $path)) as &[u8])),*]
+    };
+}
+
+/// Every bundled font file's bytes, by its path under `fonts/` (the same files as [`FONT_PATHS`]).
+#[cfg(feature = "embed")]
+pub const FONTS: &[(&str, &[u8])] = embedded![
+    "carlito/Carlito-Regular.ttf",
+    "carlito/Carlito-Bold.ttf",
+    "carlito/Carlito-Italic.ttf",
+    "carlito/Carlito-BoldItalic.ttf",
+    "caladea/Caladea-Regular.ttf",
+    "caladea/Caladea-Bold.ttf",
+    "caladea/Caladea-Italic.ttf",
+    "caladea/Caladea-BoldItalic.ttf",
+    "arimo/Arimo[wght].ttf",
+    "arimo/Arimo-Italic[wght].ttf",
+    "tinos/Tinos-Regular.ttf",
+    "tinos/Tinos-Bold.ttf",
+    "tinos/Tinos-Italic.ttf",
+    "tinos/Tinos-BoldItalic.ttf",
+    "cousine/Cousine-Regular.ttf",
+    "cousine/Cousine-Bold.ttf",
+    "cousine/Cousine-Italic.ttf",
+    "cousine/Cousine-BoldItalic.ttf",
+    "gelasio/Gelasio[wght].ttf",
+    "gelasio/Gelasio-Italic[wght].ttf",
+    "librefranklin/LibreFranklin[wght].ttf",
+    "librefranklin/LibreFranklin-Italic[wght].ttf",
+    "ebgaramond/EBGaramond[wght].ttf",
+    "ebgaramond/EBGaramond-Italic[wght].ttf",
+    "comicneue/ComicNeue-Regular.ttf",
+    "comicneue/ComicNeue-Bold.ttf",
+    "comicneue/ComicNeue-Italic.ttf",
+    "comicneue/ComicNeue-BoldItalic.ttf",
+    "questrial/Questrial-Regular.ttf",
+    "notosanssymbols2/NotoSansSymbols2-Regular.ttf",
+    "robotocondensed/RobotoCondensed[wght].ttf",
+    "robotocondensed/RobotoCondensed-Italic[wght].ttf",
+    "robotoslab/RobotoSlab[wght].ttf",
+    "dancingscript/DancingScript[wght].ttf",
+];
+
+/// Each bundled family's licence text, by its path under `fonts/`.
+#[cfg(feature = "embed")]
+pub const LICENSES: &[(&str, &[u8])] = embedded![
+    "carlito/OFL.txt",
+    "caladea/OFL.txt",
+    "arimo/OFL.txt",
+    "tinos/OFL.txt",
+    "cousine/OFL.txt",
+    "gelasio/OFL.txt",
+    "librefranklin/OFL.txt",
+    "ebgaramond/OFL.txt",
+    "comicneue/OFL.txt",
+    "questrial/OFL.txt",
+    "notosanssymbols2/OFL.txt",
+    "robotocondensed/OFL.txt",
+    "robotoslab/LICENSE.txt",
+    "dancingscript/OFL.txt",
+];
+
+/// `fonts.lock`: each file's SHA-256 and path.
+const LOCK: &str = include_str!("../fonts.lock");
+
+/// The name `fetch.sh` gives a copy of the file at `path` (under `fonts/`) in `web/`: the first 16
+/// hex digits of its SHA-256, then its file name with anything but letters, digits, `.`, `_` and `-`
+/// made `_` (`Arimo[wght].ttf` → `Arimo_wght_.ttf`). The name changes whenever the bytes do, so the
+/// web server can let browsers cache it for good.
+pub fn web_name(path: &str) -> Option<String> {
+    let hash = LOCK.lines().filter(|l| !l.starts_with('#')).find_map(|l| {
+        let mut f = l.split_whitespace();
+        let (hash, name) = (f.next()?, f.next()?);
+        (name == path).then_some(hash)
+    })?;
+    let file: String =
+        path.rsplit('/').next()?.chars().map(|c| if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') { c } else { '_' }).collect();
+    Some(format!("{}-{file}", &hash[..16]))
+}
+
+/// The web copies of the bundled fonts, by their names in `web/` ([`web_name`]), in [`FONT_PATHS`] order.
+pub fn web_files() -> Vec<String> {
+    FONT_PATHS.iter().map(|p| web_name(p).unwrap_or_else(|| panic!("{p} is not in fonts.lock"))).collect()
+}
 
 /// How closely a substitute matches the font it stands in for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -230,19 +315,26 @@ pub fn substitute(family: &str) -> Option<(&'static str, Match)> {
 
 /// Adds the bundled fonts to `db` and registers [`SUBSTITUTES`]. Call it once at startup, before
 /// any document is drawn; later calls do nothing.
+#[cfg(feature = "embed")]
 pub fn install(db: &'static FontDb) {
     static DONE: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     DONE.get_or_init(|| {
         for (_, bytes) in FONTS {
             db.add_font(bytes.to_vec());
         }
-        for (family, substitute, _) in SUBSTITUTES {
-            db.add_substitute(family, &[substitute]);
-        }
+        register_substitutes(db);
     });
 }
 
-#[cfg(test)]
+/// Registers [`SUBSTITUTES`] in `db`. A substitute that isn't loaded yet is skipped at lookup time,
+/// so the web app calls this at startup and adds the font files as they arrive.
+pub fn register_substitutes(db: &FontDb) {
+    for (family, substitute, _) in SUBSTITUTES {
+        db.add_substitute(family, &[substitute]);
+    }
+}
+
+#[cfg(all(test, feature = "embed"))]
 mod tests {
     use super::*;
 
@@ -280,6 +372,28 @@ mod tests {
             register_families(db, ["Bodoni MT"]);
             assert_eq!(db.face("Bodoni MT", "Regular").family, "Source Serif 4");
         }
+    }
+
+    #[test]
+    fn every_font_has_a_content_named_web_copy() {
+        let names = web_files();
+        assert_eq!(names.len(), FONT_PATHS.len());
+        assert_eq!(names[0], "f6418f708baede97-Carlito-Regular.ttf");
+        let unique: std::collections::BTreeSet<_> = names.iter().collect();
+        assert_eq!(unique.len(), names.len(), "two fonts share a web name");
+        assert_eq!(web_name("no/such.ttf"), None);
+        assert!(web_name("arimo/Arimo[wght].ttf").unwrap().ends_with("-Arimo_wght_.ttf"));
+        // fetch.sh writes the copies; this checks it names them the same way.
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("web");
+        for name in &names {
+            assert!(dir.join(name).is_file(), "fetch.sh wrote no web/{name}");
+        }
+    }
+
+    #[test]
+    fn the_embedded_fonts_are_the_listed_ones() {
+        assert_eq!(FONTS.iter().map(|(p, _)| *p).collect::<Vec<_>>(), FONT_PATHS);
+        assert_eq!(LICENSES.iter().map(|(p, _)| *p).collect::<Vec<_>>(), LICENSE_PATHS);
     }
 
     #[test]

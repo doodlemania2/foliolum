@@ -69,6 +69,18 @@ else
   expect_header '^content-encoding: gzip' "/$wasm (gzip)"
 fi
 
+# The fonts the editor fetches after it starts: content-named, so cached for good.
+font="$(docker exec "$name" sh -c 'ls /usr/share/nginx/html/fonts | grep "\.ttf$" | head -n1')"
+if [ -z "$font" ]; then
+  fail "no fonts in the image"
+else
+  get "/fonts/$font" -H 'Accept-Encoding: gzip'
+  expect_status 200 "/fonts/$font"
+  expect_header '^content-type: font/ttf' "/fonts/$font"
+  expect_header '^cache-control: public, max-age=31536000, immutable' "/fonts/$font"
+  expect_header '^content-encoding: gzip' "/fonts/$font (gzip)"
+fi
+
 get /no-such-file.js
 expect_status 404 /no-such-file.js
 

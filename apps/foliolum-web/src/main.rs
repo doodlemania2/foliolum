@@ -19,6 +19,9 @@ mod browser_policy;
 #[cfg(target_arch = "wasm32")]
 mod web;
 
+#[cfg(target_arch = "wasm32")]
+mod fonts_web;
+
 #[cfg(any(target_arch = "wasm32", test))]
 mod graphics;
 

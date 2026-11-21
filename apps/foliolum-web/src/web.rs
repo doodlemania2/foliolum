@@ -36,7 +36,6 @@ const LOADING_ID: &str = "foliolum_loading";
 
 pub fn start() {
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
-    foliolum_fonts::install(designcraft_fonts::FontDb::global());
     designcraft_ui_egui::brand::set(crate::BRAND);
     designcraft_ui_egui::shell::set(foliolum_shell::SHELL);
     wasm_bindgen_futures::spawn_local(async {
@@ -77,12 +76,13 @@ pub fn start() {
                             graphics_failed(&device_graphics, GRAPHICS_TITLE, GRAPHICS_MESSAGE, &format!("Device loss ({reason:?}): {message}"));
                         });
                     }
+                    crate::fonts_web::start(cc.egui_ctx.clone());
                     let inbox: Inbox = Inbox::default();
                     let mut app = DesignApp::new(crate::new_session(), services(inbox.clone(), cc.egui_ctx.clone()));
                     if has_query_flag(&query(), "sample") {
                         let _ = app.run("file.newSample", serde_json::json!({}));
                     }
-                    Ok(Box::new(WebShell { app, inbox, read_errors: Default::default(), graphics: creator_graphics }))
+                    Ok(Box::new(WebShell { app, inbox, read_errors: Default::default(), graphics: creator_graphics, held: Vec::new() }))
                 }),
             )
             .await;
@@ -353,6 +353,8 @@ struct WebShell {
     /// Why a dropped file couldn't be read, for the status bar (the read finishes outside a frame).
     read_errors: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
     graphics: GraphicsState,
+    /// Files that arrived before the fonts did ([`crate::fonts_web`]), in order.
+    held: Vec<ImportedFile>,
 }
 
 impl eframe::App for WebShell {
@@ -362,12 +364,21 @@ impl eframe::App for WebShell {
         if let Some(error) = errors.into_iter().last() {
             self.app.status(error);
         }
-        // Publisher files are opened here; DesignCraft's open routing gets everything else.
+        // Nothing opens until the fonts are in, or it would be laid out with fallback fonts.
         let arrived = std::mem::take(&mut *self.inbox.lock().unwrap_or_else(|e| e.into_inner()));
-        if !arrived.is_empty() {
+        if !arrived.is_empty() && self.held.is_empty() && !crate::fonts_web::settled() {
+            self.app.status("Loading fonts…".to_string());
+        }
+        self.held.extend(arrived);
+        // Publisher files are opened here; DesignCraft's open routing gets everything else.
+        if !self.held.is_empty() && crate::fonts_web::settled() {
             let mut statuses = Vec::new();
-            let rest = crate::pub_open::take_pubs(&mut self.app.session, arrived, |s| statuses.push(s));
+            let rest = crate::pub_open::take_pubs(&mut self.app.session, std::mem::take(&mut self.held), |s| statuses.push(s));
             self.inbox.lock().unwrap_or_else(|e| e.into_inner()).extend(rest);
+            let failed = crate::fonts_web::failed();
+            if failed > 0 {
+                statuses.push(format!("{failed} font{} couldn't be loaded; reload the page to try again", if failed == 1 { "" } else { "s" }));
+            }
             if let Some(status) = statuses.pop() {
                 self.app.status(status);
             }

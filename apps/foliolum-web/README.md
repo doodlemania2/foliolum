@@ -37,13 +37,21 @@ On the shared m4: `nice -n 15 env CARGO_BUILD_JOBS=4 trunk build` (about 5 minut
   switch in the app bar. Checked in Chrome (2026-11-20): tabs switch, Text box picks the Type tool,
   buttons grey out when they can't act, and the switch goes to the full editor and back.
 
+- Fonts load after the editor starts (2026-11-21): the 34 bundled font files are served beside the
+  `.wasm` under content-hashed names (`fonts/`, cached for good) instead of compiled in, so the `.wasm`
+  went from 63.1 MB to 50.8 MB (28.0 MB to 21.6 MB gzip, thin LTO as deployed) and a new deploy no
+  longer re-sends 6.4 MB of fonts. A file opened or dropped before they arrive waits ("Loading
+  fonts…" in the status bar), so it is never laid out with fallback fonts; if they can't be fetched it
+  opens anyway and the status bar says so. Checked in Chrome under the production CSP: Times New Roman
+  and Arial files export PDFs set in Tinos and Arimo, including one dropped while the fonts were held
+  back 8 seconds.
+
 ## Not yet
 
 - Branding: patch 0002 replaces DesignCraft's ArtCraft branding with Foliolum's (checked in Chrome: start
   screen, title bar, Help menu, About) and the ArtCraft mark isn't in the build. The word "ArtCraft" is
   still in the wasm about 128 times, in DesignCraft's translation tables and link constants for screens
   Foliolum no longer shows.
-- Fonts: about 12 MB of bundled fonts could load on demand instead of sitting in the `.wasm`.
 - Simple editor: buttons without one of DesignCraft's icons are text only (ours to draw), the words are
   English only, DesignCraft's dialogs and panels keep their own wording, and the page strip also lists
   parent pages.
