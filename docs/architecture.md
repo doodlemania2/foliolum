@@ -189,13 +189,13 @@ set, Publisher's own exports made by someone else.
 | Node | 22 | already on the runner; used for the Pubwork reader oracle |
 
 CI (`.github/workflows/ci.yml`) runs on `doodlemanage-foliolum` (label `tdp-linux`), a persistent
-Ubuntu container (2 CPUs, 6 GB) with only Node installed. The job installs the Debian packages it needs
+Ubuntu container (4 CPUs, 8 GB since 2026-11-21) with only Node installed. The job installs the Debian packages it needs
 when they are missing (a C compiler, pkg-config, libwayland-dev), then rustup and the toolchain
 `rust-toolchain.toml` names, and trunk. Cargo's home and the target directory stay under `$HOME` between
 runs as the cache. It runs fmt, clippy (native and wasm), the workspace tests, the gate's machine checks
 on the pubsmith set (`cargo xtask gate --no-review`) and the web build. That web build turns off the
 `web` profile's fat LTO (`CARGO_PROFILE_WEB_LTO=off`) and runs as a non-release trunk build, which
-skips wasm-opt: it only proves the app builds, and on 2 CPUs the LTO link alone ran past 23 minutes and
+skips wasm-opt: it only proves the app builds, and on the runner's first 2 CPUs the LTO link alone ran past 23 minutes and
 wasm-opt took 20. The first run on a cold runner took about two hours (toolchain
 23 minutes, tests 49 while the cache filled); the job's timeout is 180 minutes.
 

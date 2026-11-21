@@ -66,7 +66,7 @@ jobs:
 
       - name: Web build
         # Proves the web app builds. The size-tuned build (fat LTO, one codegen unit, then wasm-opt)
-        # takes about 6 minutes on m4 but over an hour on this 2-CPU runner, and only the deploy needs
+        # takes about 6 minutes on m4 but over an hour on this runner at 2 CPUs, and only the deploy needs
         # it (deploy.yml). So CI builds the same `web` profile without LTO, and as a non-release trunk
         # build, which skips wasm-opt (20 minutes here).
         working-directory: apps/foliolum-web
