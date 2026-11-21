@@ -9,7 +9,7 @@
     {
       "id": "editor",
       "name": "Page editor",
-      "status": "building",
+      "status": "ready",
       "summary": "Lay out text, pictures and shapes on a page in the browser.",
       "audiences": [
         "member"
@@ -23,7 +23,7 @@
     {
       "id": "pub-import",
       "name": "Publisher file import",
-      "status": "building",
+      "status": "ready",
       "summary": "Open a Microsoft Publisher file and keep working on it.",
       "audiences": [
         "member"
