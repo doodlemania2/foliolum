@@ -23,22 +23,8 @@ mkdir -p "$out/html"
 # Everything but trunk's lock file.
 (cd "$src" && find . -type f ! -name '.trunk-lock' -print0 | tar --null -T - -cf -) | tar -C "$out/html" -xf -
 
-# sha256 of each inline <script> and <style> body, as the browser hashes it (the exact bytes between
-# the tags).
-hashes="$(node - "$out/html/index.html" <<'EOF'
-const fs = require("fs"), crypto = require("crypto");
-const page = fs.readFileSync(process.argv[2], "utf8");
-// Only elements with a body: <script src=...></script> has an empty one and needs no hash.
-const bodies = (tag) => [...page.matchAll(new RegExp(`<${tag}\\b(?![^>]*\\bsrc=)[^>]*>([\\s\\S]*?)</${tag}>`, "g"))].map((m) => m[1]);
-const scripts = bodies("script"), styles = bodies("style");
-if (scripts.length !== 1 || styles.length !== 1) {
-  console.error(`expected one inline script and one inline style, found ${scripts.length} and ${styles.length}`);
-  process.exit(1);
-}
-const h = (s) => `'sha256-${crypto.createHash("sha256").update(s, "utf8").digest("base64")}'`;
-console.log(h(scripts[0]), h(styles[0]));
-EOF
-)"
+# sha256 of each inline <script> and <style> body, as the browser hashes it.
+hashes="$(node "$here/csp-hashes.js" "$out/html/index.html")"
 read -r script_hash style_hash <<<"$hashes"
 
 # The policy. 'wasm-unsafe-eval' lets the page compile its own .wasm; it does not allow eval().
