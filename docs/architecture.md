@@ -207,7 +207,9 @@ if we do, K3s provides a pinned image.
 Local builds on the shared m4 Mac: `nice -n 15`, `CARGO_BUILD_JOBS=4`, one build at a time.
 
 The toolchain install is shared by CI and the deploy (`.github/actions/rust-toolchain`). The deploy
-(`deploy.yml`, after CI passes on `main`) builds the size-tuned web app on the same runner, packages it
+(`deploy.yml`, after CI passes on `main`) builds the size-tuned web app on the same runner, with thin
+LTO instead of the profile's fat LTO (fat peaks at 11.2 GB, the runner has 8; thin peaks at 3.4 GB and
+gives a 63 MB wasm instead of 55, 28 MB gzipped instead of 25), packages it
 in an nginx image on `doodlemanage-foliolum-build` and rolls it out to app.foliolum.app over edge-ssh;
 see `deploy/README.md`.
 
