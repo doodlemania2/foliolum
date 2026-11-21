@@ -1,8 +1,8 @@
 # Builds the editor and rolls it out to app.foliolum.app after CI passes on main (#16).
 #
 # Three jobs on three runners:
-#   web     on tdp-linux (doodlemanage-foliolum, the CI runner): the size-tuned web build (fat LTO)
-#           and the image's build context (deploy/image/prepare.sh), uploaded as an artifact.
+#   web     on tdp-linux (doodlemanage-foliolum, the CI runner): the size-tuned web build (thin LTO,
+#           wasm-opt -Oz) and the image's build context (deploy/image/prepare.sh), uploaded as an artifact.
 #   image   on doodlemanage-foliolum-build (host Docker socket, nothing else): builds and pushes
 #           foliolum-app:sha-<commit>-r<run>-<attempt>, then smoke-tests the pushed image. The tag
 #           names the run too, so a rebuild of the same commit can never reuse a tag for new bytes
@@ -60,8 +60,15 @@ jobs:
       - name: DesignCraft at the pin, our patches, bundled fonts
         run: fork/fetch.sh
 
+      # Thin LTO, not the profile's fat LTO: fat LTO peaks at 11.2 GB and the runner has 8 GB (the
+      # first deploy was killed after 40 minutes). Measured on m4, both through wasm-opt -Oz: fat
+      # 55.2 MB wasm (24.6 MB gzip) at 11.2 GB; thin with 16 codegen units 63.1 MB (28.0 MB gzip)
+      # at 3.4 GB. Drop these two lines if the runner ever has 12 GB or more.
       - name: Web build (size-tuned profile)
         working-directory: apps/foliolum-web
+        env:
+          CARGO_PROFILE_WEB_LTO: thin
+          CARGO_PROFILE_WEB_CODEGEN_UNITS: "16"
         run: trunk build
 
       - name: Image context (files, gzip copies, CSP hashes)
