@@ -216,6 +216,7 @@ see `deploy/README.md`.
 ## Licensing
 
 This repo is **MIT OR Apache-2.0** (`LICENSE-MIT`, `LICENSE-APACHE`, `NOTICE`), the same as
-DesignCraft and NiftyDesign. The fonts `foliolum-fonts` embeds keep their own licences (OFL 1.1;
-Roboto Slab Apache 2.0), which ship beside them. Pubwork-derived files, if we use them, stay MPL-2.0 in their own
+DesignCraft and NiftyDesign. The fonts `foliolum-fonts` ships keep their own licences (OFL 1.1;
+Roboto Slab Apache 2.0), which ship beside them: compiled into the CLI and the gate, and served beside
+the web app's `.wasm` (`fonts/`, licence texts included) for it to fetch after it starts. Pubwork-derived files, if we use them, stay MPL-2.0 in their own
 directory with their notices.

@@ -17,6 +17,9 @@ here="$(cd "$(dirname "$0")" && pwd)"
 
 [ -f "$src/index.html" ] || { echo "no index.html in $src" >&2; exit 1; }
 ls "$src"/*.wasm >/dev/null 2>&1 || { echo "no .wasm in $src" >&2; exit 1; }
+# The editor fetches its fonts from fonts/ (apps/foliolum-web/src/fonts_web.rs); without them every
+# Publisher file would wait for fonts that never come.
+ls "$src"/fonts/*.ttf >/dev/null 2>&1 || { echo "no fonts/*.ttf in $src" >&2; exit 1; }
 
 rm -rf "$out"
 mkdir -p "$out/html"
@@ -44,7 +47,7 @@ EOF
 
 # gzip copies, keeping the originals; -n leaves the name and time out, so the bytes depend only on
 # the input.
-find "$out/html" -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' \) -size +1k -exec gzip -9 -n -k {} +
+find "$out/html" -type f \( -name '*.wasm' -o -name '*.js' -o -name '*.html' -o -name '*.ttf' \) -size +1k -exec gzip -9 -n -k {} +
 
 cp "$here/Dockerfile" "$here/site.conf" "$out/"
 echo "context in $out: $(du -sh "$out/html" | cut -f1); CSP script ${script_hash} style ${style_hash}"
