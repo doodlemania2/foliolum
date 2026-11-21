@@ -161,7 +161,8 @@ jobs:
         run: /etc/edge-deploy/edge-ssh run foliolum-app-stack deploy.sh "$REF"
 
       # Through Cloudflare. Skipped until the APP_URL variable is set, so a deploy before DNS exists
-      # is not red.
+      # is not red. Asks for HTML the way a browser does (Accept: text/html), which is when Cloudflare
+      # would inject its analytics beacon; the page must arrive without it.
       - name: The public address serves the new build
         env:
           APP_URL: ${{ vars.APP_URL }}
@@ -173,9 +174,13 @@ jobs:
           ua="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
           for _ in $(seq 1 15); do
             headers="$(curl -sS --max-time 10 -A "$ua" -o /dev/null -D - "${APP_URL}/" || true)"
-            body="$(curl -sS --max-time 10 -A "$ua" "${APP_URL}/" || true)"
+            body="$(curl -sS --compressed --max-time 10 -A "$ua" -H 'Accept: text/html,application/xhtml+xml' "${APP_URL}/" || true)"
             if grep -qi "^content-security-policy: default-src 'none'" <<<"$headers" &&
                grep -qF 'Based on DesignCraft by the ArtCraft team' <<<"$body"; then
+              if grep -qF cloudflareinsights <<<"$body"; then
+                echo "::error::${APP_URL}/ carries Cloudflare's analytics beacon, which the CSP blocks (Cache-Control: no-transform missing?)"
+                exit 1
+              fi
               echo "${APP_URL}/ serves the editor"
               exit 0
             fi
