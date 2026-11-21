@@ -40,7 +40,7 @@ c "${BASE}/" > "$tmp/page" || true
 page="$(cat "$tmp/page")"
 get /
 expect_status 200 /
-expect_header '^cache-control: no-cache' /
+expect_header '^cache-control: no-cache, no-transform' /
 expect_header "^content-security-policy: default-src 'none'; script-src 'self' 'sha256-" /
 expect_header "'wasm-unsafe-eval'" /
 expect_header '^x-content-type-options: nosniff' /
