@@ -2,8 +2,9 @@
 //!
 //! DesignCraft's editor ([`designcraft_ui_egui::DesignApp`]) through eframe's web runner (wgpu:
 //! WebGPU where available, WebGL2 otherwise), with Foliolum's shell around it: Publisher files open
-//! from File ▸ Open or by dropping them ([`pub_open`]), and Office fonts are drawn with bundled open
-//! substitutes (foliolum-fonts). Build with `trunk build` from this directory (see README.md).
+//! from File ▸ Open or by dropping them ([`pub_open`]), Office fonts are drawn with bundled open
+//! substitutes (foliolum-fonts), and the simple editor (foliolum-shell) puts a ribbon and the pages
+//! around the canvas. Build with `trunk build` from this directory (see README.md).
 //!
 //! The shell is DesignCraft's `apps/designcraft-web` (MIT OR Apache-2.0) at the pinned commit, renamed
 //! and extended; `browser_policy.rs` and `graphics.rs` are unchanged.

@@ -2786,6 +2786,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "foliolum-shell"
+version = "0.1.0"
+dependencies = [
+ "designcraft-engine",
+ "designcraft-tools",
+ "designcraft-ui-egui",
+ "egui",
+ "serde_json",
+]
+
+[[package]]
 name = "foliolum-web"
 version = "0.1.0"
 dependencies = [
@@ -2797,6 +2808,7 @@ dependencies = [
  "egui",
  "foliolum-fonts",
  "foliolum-pub",
+ "foliolum-shell",
  "form_urlencoded",
  "js-sys",
  "log",

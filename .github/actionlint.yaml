@@ -1,0 +1,7 @@
+# Our self-hosted runner labels (CLAUDE.md: CI never runs on GitHub-hosted runners).
+self-hosted-runner:
+  labels:
+    - tdp-linux
+    - tdp-windows
+    - doodlemanage-foliolum-build
+    - edge-deploy-foliolum-app

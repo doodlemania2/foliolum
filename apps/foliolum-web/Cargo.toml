@@ -30,6 +30,7 @@ serde_json = { workspace = true }
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 # Same features as DesignCraft's web app: WebGPU plus the WebGL2 fallback.
 eframe = { workspace = true, features = ["default_fonts", "wgpu", "accesskit"] }
+foliolum-shell = { workspace = true }
 rfd = { workspace = true }
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"

@@ -1,0 +1,254 @@
+diff --git a/crates/ui-egui/src/app.rs b/crates/ui-egui/src/app.rs
+index 45c29688..68696dba 100644
+--- a/crates/ui-egui/src/app.rs
++++ b/crates/ui-egui/src/app.rs
+@@ -228,18 +228,27 @@ impl DesignApp {
+             eprintln!("root start {:?}", ui.available_rect_before_wrap());
+         }
+         if !presenting {
++            // Foliolum: an embedding app's bars (crate::shell) take their places among ours.
++            let shell = crate::shell::get();
++            let shown = crate::shell::chrome(self);
+             chrome::app_bar(self, ui);
+             if dbg {
+                 eprintln!("after app bar {:?}", ui.available_rect_before_wrap());
+             }
+-            if self.ui.control_bar && self.session.active().is_some() && self.ui.hidden_panels == 0 {
++            if let Some(top) = shell.top {
++                top(self, ui);
++            }
++            if shown.control_bar && self.ui.control_bar && self.session.active().is_some() && self.ui.hidden_panels == 0 {
+                 chrome::control_bar(self, ui);
+             }
+             chrome::status_bar(self, ui);
+             if dbg {
+                 eprintln!("after status {:?}", ui.available_rect_before_wrap());
+             }
+-            if self.ui.hidden_panels != 1 {
++            if let Some(left) = shell.left {
++                left(self, ui);
++            }
++            if shown.toolbar && self.ui.hidden_panels != 1 {
+                 toolbar::show(self, ui);
+             }
+         }
+diff --git a/crates/ui-egui/src/chrome/app_bar.rs b/crates/ui-egui/src/chrome/app_bar.rs
+index 513aa01b..39c0d922 100644
+--- a/crates/ui-egui/src/chrome/app_bar.rs
++++ b/crates/ui-egui/src/chrome/app_bar.rs
+@@ -228,13 +228,18 @@ pub fn app_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
+                             app.session_home();
+                         }
+                         ui.add_space(6.0);
+-                        if !app.native_menu {
++                        // Foliolum: an embedding app can hide the menus and add its own controls.
++                        let shown = crate::shell::chrome(app);
++                        if !app.native_menu && shown.menu_bar {
+                             ui.style_mut().visuals.widgets.inactive.weak_bg_fill = Color32::TRANSPARENT;
+                             ui.style_mut().visuals.widgets.inactive.bg_stroke = Stroke::NONE;
+                             ui.style_mut().visuals.widgets.hovered.bg_stroke = Stroke::NONE;
+                             ui.style_mut().spacing.button_padding = vec2(7.0, 3.0);
+                             crate::menus::menu_bar(app, ui);
+                         }
++                        if let Some(extra) = crate::shell::get().app_bar {
++                            extra(app, ui);
++                        }
+                         menus_end = ui.min_rect().max.x;
+                         // Where the menus end on screen (moves as a narrow bar scrolls).
+                         ui.data_mut(|d| d.insert_temp(egui::Id::unique("app_bar_menus_end"), menus_end));
+@@ -245,55 +250,60 @@ pub fn app_bar(app: &mut DesignApp, ui: &mut egui::Ui) {
+                             ui.add_space(8.0);
+                             let current = app.ui.workspace.clone();
+                             let shown = crate::i18n::workspace_name(&app.ui.language, &current);
+-                            crate::menus::menu_button(
+-                                ui,
+-                                crate::rtl::widget(ui, egui::RichText::new(format!("{shown} ▾")).font(semibold(11.5)).color(t.text)),
+-                                |ui| {
+-                                    let customs: Vec<String> = app.ui.custom_workspaces.iter().map(|w| w.name.clone()).collect();
+-                                    for w in crate::menus::WORKSPACES.iter().map(|w| w.to_string()).chain(customs.iter().cloned()) {
++                            if crate::shell::chrome(app).workspace_menu {
++                                crate::menus::menu_button(
++                                    ui,
++                                    crate::rtl::widget(ui, egui::RichText::new(format!("{shown} ▾")).font(semibold(11.5)).color(t.text)),
++                                    |ui| {
++                                        let customs: Vec<String> = app.ui.custom_workspaces.iter().map(|w| w.name.clone()).collect();
++                                        for w in crate::menus::WORKSPACES.iter().map(|w| w.to_string()).chain(customs.iter().cloned()) {
++                                            if ui
++                                                .selectable_label(
++                                                    w == current,
++                                                    crate::rtl::widget(ui, crate::i18n::workspace_name(&app.ui.language, &w)),
++                                                )
++                                                .clicked()
++                                            {
++                                                let _ = app.run("window.workspace", json!({"name": w}));
++                                                ui.close();
++                                            }
++                                        }
++                                        ui.separator();
+                                         if ui
+-                                            .selectable_label(w == current, crate::rtl::widget(ui, crate::i18n::workspace_name(&app.ui.language, &w)))
++                                            .button(crate::rtl::widget(
++                                                ui,
++                                                format!(
++                                                    "{} {}",
++                                                    crate::i18n::tr(&app.ui.language, "Reset"),
++                                                    crate::i18n::workspace_name(&app.ui.language, &current)
++                                                ),
++                                            ))
+                                             .clicked()
+                                         {
+-                                            let _ = app.run("window.workspace", json!({"name": w}));
++                                            let _ = app.run("window.resetWorkspace", json!({}));
++                                            ui.close();
++                                        }
++                                        if ui.button(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "New Workspace…"))).clicked() {
++                                            let _ = app.run("window.newWorkspace", json!({}));
+                                             ui.close();
+                                         }
+-                                    }
+-                                    ui.separator();
+-                                    if ui
+-                                        .button(crate::rtl::widget(
+-                                            ui,
+-                                            format!(
+-                                                "{} {}",
+-                                                crate::i18n::tr(&app.ui.language, "Reset"),
+-                                                crate::i18n::workspace_name(&app.ui.language, &current)
+-                                            ),
+-                                        ))
+-                                        .clicked()
+-                                    {
+-                                        let _ = app.run("window.resetWorkspace", json!({}));
+-                                        ui.close();
+-                                    }
+-                                    if ui.button(crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "New Workspace…"))).clicked() {
+-                                        let _ = app.run("window.newWorkspace", json!({}));
+-                                        ui.close();
+-                                    }
+-                                    if !customs.is_empty() {
+-                                        crate::menus::menu_button(
+-                                            ui,
+-                                            crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Delete Workspace")),
+-                                            |ui| {
+-                                                for w in &customs {
+-                                                    if ui.button(w).clicked() {
+-                                                        let _ = app.run("window.deleteWorkspace", json!({"name": w}));
+-                                                        ui.close();
++                                        if !customs.is_empty() {
++                                            crate::menus::menu_button(
++                                                ui,
++                                                crate::rtl::widget(ui, crate::i18n::tr(&app.ui.language, "Delete Workspace")),
++                                                |ui| {
++                                                    for w in &customs {
++                                                        if ui.button(w).clicked() {
++                                                            let _ = app.run("window.deleteWorkspace", json!({"name": w}));
++                                                            ui.close();
++                                                        }
+                                                     }
+-                                                }
+-                                            },
+-                                        );
+-                                    }
+-                                },
+-                            );
++                                                },
++                                            );
++                                        }
++                                    },
++                                );
++                            }
+                             ui.add_space(6.0);
+                             if icons::button(ui, "share", 22.0, false, crate::i18n::tr(&app.ui.language, "Share")).clicked() {
+                                 app.status(crate::i18n::tr(&app.ui.language, "Export a PDF, IDML or package to share — no cloud account needed."));
+diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
+index 95ce63b2..f19c3b47 100644
+--- a/crates/ui-egui/src/lib.rs
++++ b/crates/ui-egui/src/lib.rs
+@@ -46,6 +46,7 @@ pub mod render_worker;
+ mod rtl;
+ mod section_options;
+ pub mod separations;
++pub mod shell;
+ mod shortcut_import;
+ mod shortcuts_dialog;
+ pub mod story_editor;
+diff --git a/crates/ui-egui/src/shell.rs b/crates/ui-egui/src/shell.rs
+new file mode 100644
+index 00000000..50e49f21
+--- /dev/null
++++ b/crates/ui-egui/src/shell.rs
+@@ -0,0 +1,74 @@
++//! Room in the window for an app built on DesignCraft: its own bar under the app bar, its own strip
++//! at the left edge, its own controls in the app bar, and which of DesignCraft's bars to show. The
++//! app sets it with [`set`] before the UI starts; by default nothing changes.
++//!
++//! The hooks are plain functions called while [`crate::DesignApp::ui`] lays out the window, so what
++//! they draw takes its place among DesignCraft's panels. They can run any command (`app.run`), select
++//! tools and draw DesignCraft's own panels and icons, as a menu or the toolbar would.
++
++use crate::DesignApp;
++
++/// Draws part of the window. `ui` is the root `Ui` at that point of the layout: add a panel to it.
++pub type Hook = fn(&mut DesignApp, &mut egui::Ui);
++
++/// Which of DesignCraft's bars to show, decided each frame.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub struct Chrome {
++    /// The menus in the app bar.
++    pub menu_bar: bool,
++    /// The workspace menu in the app bar.
++    pub workspace_menu: bool,
++    /// The Tools panel at the left.
++    pub toolbar: bool,
++    /// The Control bar under the app bar.
++    pub control_bar: bool,
++}
++
++impl Chrome {
++    /// Everything DesignCraft shows.
++    pub const ALL: Chrome = Chrome { menu_bar: true, workspace_menu: true, toolbar: true, control_bar: true };
++}
++
++/// What an embedding app adds to the window, and which of DesignCraft's bars it keeps.
++#[derive(Clone, Copy, Debug)]
++pub struct Shell {
++    /// Which of DesignCraft's bars to show; asked each frame, so the app can switch modes.
++    pub chrome: fn(&DesignApp) -> Chrome,
++    /// Drawn right under the app bar (and above the Control bar), as a top panel.
++    pub top: Option<Hook>,
++    /// Drawn at the left edge, left of the Tools panel, as a left panel.
++    pub left: Option<Hook>,
++    /// Drawn in the app bar after the menus (or where they would be), inline.
++    pub app_bar: Option<Hook>,
++}
++
++/// DesignCraft's own window: nothing added, every bar shown.
++pub const DESIGNCRAFT: Shell = Shell { chrome: |_| Chrome::ALL, top: None, left: None, app_bar: None };
++
++static SHELL: std::sync::OnceLock<Shell> = std::sync::OnceLock::new();
++
++/// Sets the app's shell, once, before the UI starts. Returns false if it was already set.
++pub fn set(shell: Shell) -> bool {
++    SHELL.set(shell).is_ok()
++}
++
++/// The app's shell: what [`set`] gave, else [`DESIGNCRAFT`].
++pub fn get() -> &'static Shell {
++    SHELL.get().unwrap_or(&DESIGNCRAFT)
++}
++
++/// The bars to show this frame.
++pub fn chrome(app: &DesignApp) -> Chrome {
++    (get().chrome)(app)
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    #[test]
++    fn designcraft_keeps_its_whole_window() {
++        assert!(get().top.is_none() && get().left.is_none() && get().app_bar.is_none());
++        assert_eq!((DESIGNCRAFT.chrome)(&DesignApp::new(designcraft_engine::Session::new(), Default::default())), Chrome::ALL);
++    }
++}

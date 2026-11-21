@@ -37,6 +37,7 @@ foliolum/
     foliolum-web/              web entry point (trunk, wasm32), our branding, .pub open wiring
     foliolum-cli/              headless import and PDF export, used by the 50-file gate
   gate/                        gate manifest: per-file hashes and expected results, never the files
+  deploy/                      the editor's image (nginx, CSP) and its edge stack (app.foliolum.app)
   xtask/                       fetch, sync-workspace, gate, wasm
   Cargo.toml                   our workspace; [patch.crates-io] and profiles copied from upstream
   rust-toolchain.toml
@@ -69,10 +70,12 @@ contributions are on hold.
 1. **File ▸ Open routing is hardcoded** (`crates/engine/src/cmd/file/open.rs`). We own the web entry
    app, so we try first to turn a .pub into a `Document` before the engine sees it. If that isn't
    clean, it becomes a small patch adding .pub to the open routing.
-2. **Menus, panels and commands are fixed tables.** The Publisher-mode ribbon and menus are a patch to
-   `crates/ui-egui/src/menus/` (and any new commands, to `crates/engine/src/cmd.rs`). We keep the
-   patch narrow: one table switch that selects "Publisher mode", with the tables themselves in our
-   crate wherever the types allow.
+2. **Menus, panels and commands are fixed tables, and `DesignApp::ui` lays out the whole window.**
+   Patch `0003-ui-embedder-shell` (done) adds layout hooks instead of new tables: our bar under the app
+   bar, our strip at the left, our controls in the app bar, and a per-frame choice of DesignCraft's bars.
+   Foliolum's simple editor (`crates/foliolum-shell`) is a ribbon whose buttons run DesignCraft's
+   existing menu commands, tools and panels, plus the Pages panel down the left. A switch goes to the
+   full editor. No new commands so far.
 3. **The web build has no control channel or MCP.** The AI phases need one. That is a later patch and
    is out of scope for Phase 1.
 4. **ArtCraft brand assets are trademarks and not open source** (`docs/brand/LICENSE-brand.txt`), and
@@ -186,11 +189,15 @@ set, Publisher's own exports made by someone else.
 | Node | 22 | already on the runner; used for the Pubwork reader oracle |
 
 CI (`.github/workflows/ci.yml`) runs on `doodlemanage-foliolum` (label `tdp-linux`), a persistent
-Ubuntu container (2 CPUs, 6 GB) with only Node installed. The job installs the Debian packages it needs
+Ubuntu container (4 CPUs, 8 GB since 2026-11-21) with only Node installed. The job installs the Debian packages it needs
 when they are missing (a C compiler, pkg-config, libwayland-dev), then rustup and the toolchain
 `rust-toolchain.toml` names, and trunk. Cargo's home and the target directory stay under `$HOME` between
 runs as the cache. It runs fmt, clippy (native and wasm), the workspace tests, the gate's machine checks
-on the pubsmith set (`cargo xtask gate --no-review`) and the web build.
+on the pubsmith set (`cargo xtask gate --no-review`) and the web build. That web build turns off the
+`web` profile's fat LTO (`CARGO_PROFILE_WEB_LTO=off`) and runs as a non-release trunk build, which
+skips wasm-opt: it only proves the app builds, and on the runner's first 2 CPUs the LTO link alone ran past 23 minutes and
+wasm-opt took 20. The first run on a cold runner took about two hours (toolchain
+23 minutes, tests 49 while the cache filled); the job's timeout is 180 minutes.
 
 The repo is public, so CI never runs on `pull_request`: it runs on push to `main` and on
 `workflow_dispatch`, and only for the repository owner. To check a PR branch before merging:
@@ -198,6 +205,11 @@ The repo is public, so CI never runs on `pull_request`: it runs on push to `main
 if we do, K3s provides a pinned image.
 
 Local builds on the shared m4 Mac: `nice -n 15`, `CARGO_BUILD_JOBS=4`, one build at a time.
+
+The toolchain install is shared by CI and the deploy (`.github/actions/rust-toolchain`). The deploy
+(`deploy.yml`, after CI passes on `main`) builds the size-tuned web app on the same runner, packages it
+in an nginx image on `doodlemanage-foliolum-build` and rolls it out to app.foliolum.app over edge-ssh;
+see `deploy/README.md`.
 
 ## Licensing
 

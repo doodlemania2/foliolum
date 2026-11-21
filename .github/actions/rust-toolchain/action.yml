@@ -1,0 +1,70 @@
+# Rust (the toolchain rust-toolchain.toml names) and trunk on the tdp-linux runner, under $HOME, plus
+# the Debian packages the build needs when they are missing. Shared by ci.yml and deploy.yml.
+#
+# The runner (doodlemanage-foliolum) is a persistent Ubuntu container with Node and little else,
+# running as root. Cargo's home and the target directory live under $HOME, outside the checkout, so
+# they survive between runs (checkout cleans the workspace) and act as the cache; a recreated runner
+# just starts cold. Run after actions/checkout.
+name: Rust toolchain and trunk
+description: Debian packages, rustup, the pinned toolchain and trunk, cached under $HOME
+inputs:
+  rustup-version:
+    description: rustup-init version
+    default: "1.29.3"
+  rustup-init-sha256:
+    description: sha256 of that rustup-init for x86_64-unknown-linux-gnu
+    default: b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55
+  trunk-version:
+    description: trunk version
+    default: "0.22.1"
+runs:
+  using: composite
+  steps:
+    - name: Debian packages (only those missing)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # build-essential: ring's build script and the linker; pkg-config and libwayland-dev:
+        # DesignCraft's window crate (wayland-sys). git and curl: the fetch scripts.
+        pkgs=(build-essential pkg-config libwayland-dev git curl ca-certificates)
+        missing=()
+        for p in "${pkgs[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
+        if ((${#missing[@]})); then
+          echo "installing: ${missing[*]}"
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends "${missing[@]}"
+        else
+          echo "all present"
+        fi
+
+    - name: Rust toolchain (rust-toolchain.toml) and trunk
+      shell: bash
+      env:
+        RUSTUP_VERSION: ${{ inputs.rustup-version }}
+        RUSTUP_INIT_SHA256: ${{ inputs.rustup-init-sha256 }}
+        TRUNK_VERSION: ${{ inputs.trunk-version }}
+      run: |
+        set -euo pipefail
+        {
+          echo "CARGO_HOME=$HOME/.cargo"
+          echo "RUSTUP_HOME=$HOME/.rustup"
+          echo "CARGO_TARGET_DIR=$HOME/.cache/foliolum-target"
+        } >> "$GITHUB_ENV"
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        export PATH="$HOME/.cargo/bin:$PATH"
+        if ! command -v rustup >/dev/null; then
+          tmp="$(mktemp -d)"
+          curl -fsSL --retry 3 -o "$tmp/rustup-init" \
+            "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init"
+          echo "${RUSTUP_INIT_SHA256}  $tmp/rustup-init" | sha256sum -c -
+          chmod +x "$tmp/rustup-init"
+          "$tmp/rustup-init" -y --no-modify-path --profile minimal --default-toolchain none
+          rm -rf "$tmp"
+        fi
+        # Installs the channel, components and target rust-toolchain.toml names.
+        rustup toolchain install
+        if [[ "$(trunk -V 2>/dev/null || true)" != "trunk $TRUNK_VERSION" ]]; then
+          cargo install trunk --version "$TRUNK_VERSION" --locked
+        fi
+        rustc -V; cargo -V; trunk -V
