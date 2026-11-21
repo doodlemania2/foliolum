@@ -39,7 +39,8 @@ jobs:
     name: Build and test
     if: github.actor == github.repository_owner
     runs-on: ${{ vars.RUNNER_LINUX || 'tdp-linux' }}
-    timeout-minutes: 150
+    # A cold runner (no toolchain, empty cache) needs about two hours; a warm one far less.
+    timeout-minutes: 180
     steps:
       - name: Debian packages (only those missing)
         shell: bash
@@ -114,7 +115,13 @@ jobs:
         run: cargo clippy -p foliolum-web --target wasm32-unknown-unknown -- -D warnings
 
       - name: Web build
+        # Proves the web app builds. The size-tuned profile's fat LTO with one codegen unit takes
+        # about 3 minutes on m4 but ran past 23 on this 2-CPU runner, so CI builds the same profile
+        # without LTO (about the same time as the rest of the build). The deploy build keeps it.
         working-directory: apps/foliolum-web
+        env:
+          CARGO_PROFILE_WEB_LTO: "off"
+          CARGO_PROFILE_WEB_CODEGEN_UNITS: "16"
         run: |
           trunk build
           ls -l ../../dist/web/*.wasm

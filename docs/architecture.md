@@ -192,7 +192,10 @@ Ubuntu container (2 CPUs, 6 GB) with only Node installed. The job installs the D
 when they are missing (a C compiler, pkg-config, libwayland-dev), then rustup and the toolchain
 `rust-toolchain.toml` names, and trunk. Cargo's home and the target directory stay under `$HOME` between
 runs as the cache. It runs fmt, clippy (native and wasm), the workspace tests, the gate's machine checks
-on the pubsmith set (`cargo xtask gate --no-review`) and the web build.
+on the pubsmith set (`cargo xtask gate --no-review`) and the web build. That web build turns off the
+`web` profile's fat LTO (`CARGO_PROFILE_WEB_LTO=off`): it only proves the app builds, and on 2 CPUs the
+LTO link alone ran past 23 minutes. The first run on a cold runner took about two hours (toolchain
+23 minutes, tests 49 while the cache filled); the job's timeout is 180 minutes.
 
 The repo is public, so CI never runs on `pull_request`: it runs on push to `main` and on
 `workflow_dispatch`, and only for the repository owner. To check a PR branch before merging:
