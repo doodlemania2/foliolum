@@ -7,12 +7,8 @@
 #   - every job runs only when the repository owner started it.
 # To check a PR branch before merging: gh workflow run ci.yml --ref <branch>
 #
-# The runner (doodlemanage-foliolum, label tdp-linux) is a persistent Ubuntu container with Node and
-# little else, running as root. The job installs the few Debian packages it needs when they are
-# missing, and the Rust toolchain rust-toolchain.toml pins, under $HOME (trunk's own tools are pinned
-# in Trunk.toml). Cargo's home and the target directory live under $HOME too, outside the checkout, so
-# they survive between runs (checkout cleans the workspace) and act as the cache; a recreated runner
-# just starts cold.
+# The runner (doodlemanage-foliolum, label tdp-linux) and how the toolchain is installed and cached:
+# .github/actions/rust-toolchain.
 name: CI
 
 on:
@@ -28,9 +24,6 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RUSTUP_VERSION: "1.29.3"
-  RUSTUP_INIT_SHA256: b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55
-  TRUNK_VERSION: "0.22.1"
   CARGO_TERM_COLOR: always
   CARGO_INCREMENTAL: "0"
 
@@ -42,54 +35,11 @@ jobs:
     # A cold runner (no toolchain, empty cache) needs about two hours; a warm one far less.
     timeout-minutes: 180
     steps:
-      - name: Debian packages (only those missing)
-        shell: bash
-        run: |
-          set -euo pipefail
-          # build-essential: ring's build script and the linker; pkg-config and libwayland-dev:
-          # DesignCraft's window crate (wayland-sys). git and curl: the fetch scripts.
-          pkgs=(build-essential pkg-config libwayland-dev git curl ca-certificates)
-          missing=()
-          for p in "${pkgs[@]}"; do dpkg -s "$p" >/dev/null 2>&1 || missing+=("$p"); done
-          if ((${#missing[@]})); then
-            echo "installing: ${missing[*]}"
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq
-            apt-get install -y -qq --no-install-recommends "${missing[@]}"
-          else
-            echo "all present"
-          fi
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Rust toolchain (rust-toolchain.toml) and trunk
-        shell: bash
-        run: |
-          set -euo pipefail
-          {
-            echo "CARGO_HOME=$HOME/.cargo"
-            echo "RUSTUP_HOME=$HOME/.rustup"
-            echo "CARGO_TARGET_DIR=$HOME/.cache/foliolum-target"
-          } >> "$GITHUB_ENV"
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          export PATH="$HOME/.cargo/bin:$PATH"
-          if ! command -v rustup >/dev/null; then
-            tmp="$(mktemp -d)"
-            curl -fsSL --retry 3 -o "$tmp/rustup-init" \
-              "https://static.rust-lang.org/rustup/archive/${RUSTUP_VERSION}/x86_64-unknown-linux-gnu/rustup-init"
-            echo "${RUSTUP_INIT_SHA256}  $tmp/rustup-init" | sha256sum -c -
-            chmod +x "$tmp/rustup-init"
-            "$tmp/rustup-init" -y --no-modify-path --profile minimal --default-toolchain none
-            rm -rf "$tmp"
-          fi
-          # Installs the channel, components and target rust-toolchain.toml names.
-          rustup toolchain install
-          if [[ "$(trunk -V 2>/dev/null || true)" != "trunk $TRUNK_VERSION" ]]; then
-            cargo install trunk --version "$TRUNK_VERSION" --locked
-          fi
-          rustc -V; cargo -V; trunk -V
+      - uses: ./.github/actions/rust-toolchain
 
       - name: DesignCraft at the pin, our patches, bundled fonts
         run: fork/fetch.sh

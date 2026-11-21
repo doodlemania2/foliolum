@@ -37,6 +37,7 @@ foliolum/
     foliolum-web/              web entry point (trunk, wasm32), our branding, .pub open wiring
     foliolum-cli/              headless import and PDF export, used by the 50-file gate
   gate/                        gate manifest: per-file hashes and expected results, never the files
+  deploy/                      the editor's image (nginx, CSP) and its edge stack (app.foliolum.app)
   xtask/                       fetch, sync-workspace, gate, wasm
   Cargo.toml                   our workspace; [patch.crates-io] and profiles copied from upstream
   rust-toolchain.toml
@@ -203,6 +204,11 @@ The repo is public, so CI never runs on `pull_request`: it runs on push to `main
 if we do, K3s provides a pinned image.
 
 Local builds on the shared m4 Mac: `nice -n 15`, `CARGO_BUILD_JOBS=4`, one build at a time.
+
+The toolchain install is shared by CI and the deploy (`.github/actions/rust-toolchain`). The deploy
+(`deploy.yml`, after CI passes on `main`) builds the size-tuned web app on the same runner, packages it
+in an nginx image on `doodlemanage-foliolum-build` and rolls it out to app.foliolum.app over edge-ssh;
+see `deploy/README.md`.
 
 ## Licensing
 

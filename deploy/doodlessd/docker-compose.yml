@@ -1,0 +1,37 @@
+# The Foliolum editor (app.foliolum.app) on doodlessd, mirrored to doodlessd2 by fleet-mirror.
+#
+# Lives at /home/derek/foliolum-app-stack/docker-compose.yml. CI deploys it from the
+# edge-deploy-foliolum-app runners over edge-ssh (.github/workflows/deploy.yml), so no runner lives
+# here. The image tag is pinned in .env (FOLIOLUM_APP_IMAGE=...:sha-<commit>), never :latest.
+#
+# The only way in is the shared public-fleet Cloudflare tunnel (K3s repo). Its cloudflared uses the
+# host network and reaches the editor on 127.0.0.1:18117, the port reserved for app.foliolum.app in
+# K3s services/edge/README.md. No public port.
+
+name: foliolum-app
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "3" }
+
+services:
+  foliolum-app:
+    image: ${FOLIOLUM_APP_IMAGE:?set FOLIOLUM_APP_IMAGE in .env (deploy.sh does)}
+    container_name: foliolum-app
+    restart: unless-stopped
+    ports: ["127.0.0.1:18117:8080"]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+      start_interval: 2s
+    deploy:
+      resources:
+        limits: { memory: 64m, cpus: "0.5" }
+    logging: *logging
