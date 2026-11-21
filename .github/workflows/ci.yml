@@ -65,13 +65,14 @@ jobs:
         run: cargo clippy -p foliolum-web --target wasm32-unknown-unknown -- -D warnings
 
       - name: Web build
-        # Proves the web app builds. The size-tuned profile's fat LTO with one codegen unit takes
-        # about 3 minutes on m4 but ran past 23 on this 2-CPU runner, so CI builds the same profile
-        # without LTO (about the same time as the rest of the build). The deploy build keeps it.
+        # Proves the web app builds. The size-tuned build (fat LTO, one codegen unit, then wasm-opt)
+        # takes about 6 minutes on m4 but over an hour on this 2-CPU runner, and only the deploy needs
+        # it (deploy.yml). So CI builds the same `web` profile without LTO, and as a non-release trunk
+        # build, which skips wasm-opt (20 minutes here).
         working-directory: apps/foliolum-web
         env:
           CARGO_PROFILE_WEB_LTO: "off"
           CARGO_PROFILE_WEB_CODEGEN_UNITS: "16"
         run: |
-          trunk build
+          trunk build --release false
           ls -l ../../dist/web/*.wasm
