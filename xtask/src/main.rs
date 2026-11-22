@@ -19,9 +19,16 @@
 //! Pubwork's reader (pubwork.rs), which needs `gate/fetch-fixtures.sh` and Node (`node` on the path, or
 //! `$FOLIOLUM_NODE`).
 //!
+//!   cargo xtask synth [--count N] [--seed S] OUT
+//!
+//! `synth` writes the stress set (synth.rs): N synthetic publications (default 50, seed 1) made by
+//! our own writer, with a reference beside each in the layout-export shape, for `gate` to check.
+//! They test robustness, not fidelity to Publisher, and don't count toward the Phase 1 gate.
+//!
 //! Exit codes: 0 every file passes, 1 usage or I/O error, 2 at least one file does not pass.
 mod gate;
 mod pubwork;
+mod synth;
 mod truth;
 
 use std::path::{Path, PathBuf};
@@ -37,13 +44,29 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+        Some("synth") => match run_synth(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("xtask synth: {e}");
+                ExitCode::from(1)
+            }
+        },
         _ => {
             eprintln!(
-                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH..."
+                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH...\n       cargo xtask synth [--count N] [--seed S] OUT"
             );
             ExitCode::from(1)
         }
     }
+}
+
+fn run_synth(mut args: pico_args::Arguments) -> Result<(), String> {
+    let count: usize = args.opt_value_from_str("--count").map_err(|e| e.to_string())?.unwrap_or(50);
+    let seed: u64 = args.opt_value_from_str("--seed").map_err(|e| e.to_string())?.unwrap_or(1);
+    let out: PathBuf = args.free_from_str().map_err(|_| "give the folder to write the set to".to_string())?;
+    synth::write_set(&out, count, seed)?;
+    println!("{count} synthetic publications (seed {seed}) and their references in {}", out.display());
+    Ok(())
 }
 
 /// DesignCraft's switch for a font database without the machine's installed fonts.

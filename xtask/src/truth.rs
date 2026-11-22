@@ -1,32 +1,14 @@
 // Copyright (c) 2026 srt8hellcat2-ui. SPDX-License-Identifier: MIT OR Apache-2.0
-// Moved from NiftyDesign's crates/pub/tests/corpus.rs (see crates/foliolum-pub/ORIGIN.md); the scoring is
-// unchanged, only its entry points are public so the gate can call it.
+// Moved from NiftyDesign's crates/pub/tests/corpus.rs (see crates/foliolum-pub/ORIGIN.md); its entry points
+// are public so the gate can call it. Foliolum: an element is matched among the items shown on its own page
+// (that page's and its parent's), not across the whole document, so a multi-page file whose pages have
+// frames in the same places is scored page by page (#25).
 //! Scores an imported document against Publisher's own layout export of the same file
 //! (`truth/<name>.json`, as shipped with FuncularLabs/pubsmith's fixtures). The export is used only to
 //! score, never to work out the file format.
 
 use designcraft_doc::{Content, Document, Item, ItemId, SpreadRef};
 use designcraft_geom::{Affine, Rect};
-
-/// Leaf items: group members instead of their groups (Publisher's layout export lists members).
-fn leaves<'a>(it: &'a Item, out: &mut Vec<&'a Item>) {
-    match &it.content {
-        Content::Group { items } => items.iter().for_each(|c| leaves(c, out)),
-        _ => out.push(it),
-    }
-}
-
-/// Items drawn on document pages: their own and their parents' (Publisher exports master items
-/// on every page).
-fn shown_items(d: &Document) -> Vec<&Item> {
-    let mut out = Vec::new();
-    for sp in d.spreads.iter().chain(&d.parents) {
-        for it in &sp.items {
-            leaves(it, &mut out);
-        }
-    }
-    out
-}
 
 fn story_text(d: &Document, it: &Item) -> Option<String> {
     let Content::Text(t) = &it.content else { return None };
@@ -151,8 +133,10 @@ pub fn score(d: &Document, truth: &serde_json::Value, s: &mut Score, notes: &mut
     if pages.len() != d.page_count() {
         notes.push(format!("pages {} vs truth {}", d.page_count(), pages.len()));
     }
-    let all = shown_items(d);
     for (pi, p) in pages.iter().enumerate() {
+        // Items drawn on this page: its own and its parent's (Publisher exports master items on
+        // every page).
+        let all = crate::pubwork::page_items(d, pi);
         if let Some(page) = d.page(pi)
             && ((page.width - p["width"].as_f64().unwrap_or(0.0)).abs() > 0.5 || (page.height - p["height"].as_f64().unwrap_or(0.0)).abs() > 0.5)
         {

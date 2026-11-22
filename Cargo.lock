@@ -8024,6 +8024,7 @@ checksum = "9440ea3e5aeabb0ac63af70daf835274065238cdd0cec83418f417eae38bacee"
 name = "xtask"
 version = "0.1.0"
 dependencies = [
+ "cfb",
  "designcraft-color",
  "designcraft-doc",
  "designcraft-engine",
@@ -8032,6 +8033,7 @@ dependencies = [
  "designcraft-render",
  "foliolum-fonts",
  "foliolum-pub",
+ "miniz_oxide 0.8.9",
  "pico-args",
  "serde",
  "serde_json",

@@ -26,9 +26,31 @@ Publisher 97–2000 files, which foliolum-pub refuses by design). `--no-review` 
 three machine checks alone, since only a person can give the fourth, and every file in those runs must
 pass them. The table still shows all four.
 
+## The stress set (synthetic)
+
+`cargo xtask synth fixtures/stress` writes 50 publications made up by our own writer (`xtask/src/synth.rs`,
+seed 1, so the same files every time), and beside each a reference in the layout-export shape:
+
+```sh
+cargo xtask synth fixtures/stress
+cargo xtask gate --set stress --names fixtures/stress
+```
+
+They have one to eight pages in five page sizes, master pages with footers, columns of text boxes with
+headlines and body text in ten fonts, mixed sizes, bold, italic and colours, aligned and bulleted
+paragraphs, stories linked across pages, text in Wingdings and Symbol, filled and outlined shapes and PNG
+pictures: about 240 pages and 3,300 elements in all. About one text box in ten is overfull on purpose.
+
+**They are not real Publisher files and don't count toward the Phase 1 gate.** Only Publisher writes .pub
+files, and ours are written from the same format notes the importer reads with, so they test robustness
+(large, mixed documents import, check out complete and export) rather than fidelity to Publisher. Pubwork's
+reader can't read them, so their references are the generator's own. CI generates and checks them;
+`results/stress.md` is the recorded table.
+
 ## The completeness references
 
-A file with a layout export (`truth/<name>.json` beside it) is scored against it. Any other file,
+A file with a layout export (`truth/<name>.json` beside it) is scored against it, page by page: each
+element is matched among the items shown on its own page. Any other file,
 including every contributed one, is checked against **Pubwork's reader**, an independent reading of the
 same file: `gate/pubwork/oracle.mjs` runs it under Node (`node` on the path, or `$FOLIOLUM_NODE`) and
 summarises each page, and `xtask/src/pubwork.rs` summarises the import the same way and compares:
@@ -61,7 +83,8 @@ Output goes to `target/gate/<set>/`: one PDF per file, `<label>/page-NN.png` ren
 
 ## What is committed here, and what never is
 
-- **Committed:** `results/<set>.md` (labels, SHA-256s and results) and `verdicts.json`.
+- **Committed:** `results/<set>.md` (labels, SHA-256s and results) and `verdicts.json`. The stress set is
+  generated, so it is never committed either.
 - **Never committed:** the files themselves. Contributed files can carry people's names and contact
   details, so they are labelled by hash. Use `--names` only for public sets. pubsmith's fixtures carry
   Microsoft material outside pubsmith's licence, so they are fetched, never vendored.
