@@ -89,7 +89,7 @@ fn leaves<'a>(it: &'a Item, out: &mut Vec<&'a Item>) {
 
 /// The items drawn on one page: its own and those of the parent pages it shows (libmspub draws a
 /// master page's items on every page that uses it).
-fn page_items(d: &Document, abs: usize) -> Vec<&Item> {
+pub fn page_items(d: &Document, abs: usize) -> Vec<&Item> {
     let mut out = Vec::new();
     let Some((si, pi)) = d.page_loc(abs) else { return out };
     let (Some(spread), Some(page)) = (d.spreads.get(si), d.page(abs)) else { return out };
