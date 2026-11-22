@@ -1026,20 +1026,51 @@ impl<'a> Builder<'a> {
         if units.last() == Some(&0x0d) {
             units.pop();
         }
+        let defaults = self.q.default_char.clone();
+        let runs: Vec<(std::ops::Range<usize>, quill::CharStyle)> =
+            if qs.chars.is_empty() { vec![(0..units.len(), defaults.clone())] } else { qs.chars.clone() };
+        let run_font = |style: &quill::CharStyle| style.font.or(defaults.font).and_then(|f| self.q.fonts.get(f as usize)).cloned();
+        // Foliolum: text set in a symbol font becomes the Unicode characters it draws (symbols.rs).
+        let mut symbol_font: Vec<Option<String>> = vec![None; units.len()];
+        for (range, style) in &runs {
+            if let Some(f) = run_font(style).filter(|f| symbols::is_symbol_font(f)) {
+                for slot in symbol_font.iter_mut().take(range.end).skip(range.start) {
+                    *slot = Some(f.clone());
+                }
+            }
+        }
+        let mut unmapped = 0usize;
         let mut skipped = false;
+        let mut unit = 0;
         for res in char::decode_utf16(units.iter().copied()) {
             let len16 = res.as_ref().map_or(1, |c| c.len_utf16());
             for _ in 0..len16 {
                 at.push(text.len());
             }
+            let symbol = symbol_font.get(unit).and_then(Option::as_deref);
+            unit += len16;
             match res {
                 Ok('\r') => text.push('\n'),
                 Ok('\u{000b}') => text.push(designcraft_doc::FORCED_LINE_BREAK),
                 Ok('\t') => text.push('\t'),
                 Ok(c) if (c as u32) < 0x20 => skipped = true,
-                Ok(c) => text.push(c),
+                Ok(c) => match symbol {
+                    Some(f) => match symbols::text_char(f, c) {
+                        Some(u) => text.push(u),
+                        None => {
+                            unmapped += 1;
+                            text.push(c);
+                        }
+                    },
+                    None => text.push(c),
+                },
                 Err(_) => text.push(char::REPLACEMENT_CHARACTER),
             }
+        }
+        if unmapped > 0 {
+            self.warnings.push(format!(
+                "{unmapped} character(s) set in a symbol font (such as Webdings or Wingdings 2) have no Unicode equivalent here and may show as letters."
+            ));
         }
         at.push(text.len());
         if skipped {
@@ -1047,18 +1078,27 @@ impl<'a> Builder<'a> {
         }
         let (id, sid) = self.doc.add_text_frame(r, rect, self.layer, &text, ParaFormat::default()).map_err(|e| PubError::Malformed(e.to_string()))?;
         let byte = |u: usize| at.get(u.min(at.len().saturating_sub(1))).copied().unwrap_or(0);
-        let defaults = self.q.default_char.clone();
         let mut char_ops = Vec::new();
-        let runs: Vec<(std::ops::Range<usize>, quill::CharStyle)> =
-            if qs.chars.is_empty() { vec![(0..units.len(), defaults.clone())] } else { qs.chars.clone() };
-        for (range, style) in runs {
+        // The text font a symbol-font run takes instead: the defaults' when that is a text font,
+        // otherwise the last text run's before it.
+        let mut text_font = run_font(&defaults).filter(|f| !f.is_empty() && !symbols::is_symbol_font(f));
+        for (range, style) in &runs {
             let (a, z) = (byte(range.start), byte(range.end));
             if z <= a {
                 continue;
             }
             let mut ops: Vec<(&'static str, serde_json::Value)> = Vec::new();
-            let font = style.font.or(defaults.font).and_then(|f| self.q.fonts.get(f as usize)).cloned();
-            if let Some(f) = font.filter(|f| !f.is_empty()) {
+            let font = match run_font(style).filter(|f| !f.is_empty()) {
+                Some(f) if symbols::is_symbol_font(&f) => text_font.clone(),
+                Some(f) => {
+                    if !symbols::is_symbol_font(&f) {
+                        text_font = Some(f.clone());
+                    }
+                    Some(f)
+                }
+                None => None,
+            };
+            if let Some(f) = font {
                 ops.push(("fontFamily", json!(f)));
             }
             let (bold, italic) = (style.bold.or(defaults.bold).unwrap_or(false), style.italic.or(defaults.italic).unwrap_or(false));
