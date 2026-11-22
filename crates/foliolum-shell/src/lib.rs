@@ -8,13 +8,14 @@
 //!
 //! Clean room: names, groupings and drawings are ours, not Microsoft Publisher's.
 
+pub mod icons;
 pub mod tables;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use designcraft_ui_egui::DesignApp;
 use designcraft_ui_egui::shell::{Chrome, Shell};
 use designcraft_ui_egui::theme::Tokens;
-use designcraft_ui_egui::{DesignApp, icons};
 use egui::{Color32, Sense, Stroke, StrokeKind, vec2};
 use tables::{Action, Button, TABS};
 
@@ -123,7 +124,10 @@ fn ribbon_button(app: &mut DesignApp, ui: &mut egui::Ui, b: &Button, t: &Tokens)
         // With an icon the label sits under it; without one it is centred in the button.
         let text_top = if let Some(icon) = b.icon {
             let r = egui::Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 4.0 + ICON / 2.0), vec2(ICON, ICON));
-            icons::paint(p, r, icon, if on { t.icon } else { t.text_disabled });
+            let c = if on { t.icon } else { t.text_disabled };
+            if !icons::paint(p, r, icon, c) {
+                designcraft_ui_egui::icons::paint(p, r, icon, c);
+            }
             r.bottom() + 2.0
         } else {
             rect.center().y - galley.size().y / 2.0
@@ -227,6 +231,22 @@ mod tests {
         run(&mut app, b);
         assert_eq!(app.session.tool_id(), "type");
         assert!(selected(&app, b));
+    }
+
+    /// Every button has an icon, and it is one we or DesignCraft draw (DesignCraft draws a plain
+    /// square for a name it doesn't know, so a misspelt or renamed one would show as that).
+    #[test]
+    fn every_button_has_an_icon_someone_draws() {
+        let unknown = icons::drawn(|p, r| designcraft_ui_egui::icons::paint(p, r, "fo-no-such-icon", Color32::WHITE));
+        let mut n = 0;
+        for b in tables::buttons() {
+            let icon = b.icon.unwrap_or_else(|| panic!("{} has no icon", b.label));
+            let ours = icons::NAMES.contains(&icon);
+            let theirs = icons::drawn(|p, r| designcraft_ui_egui::icons::paint(p, r, icon, Color32::WHITE)) != unknown;
+            assert!(ours || theirs, "{}: nobody draws {icon}", b.label);
+            n += 1;
+        }
+        assert!(n > 20, "only {n} buttons");
     }
 
     #[test]
