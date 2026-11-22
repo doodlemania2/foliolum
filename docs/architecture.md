@@ -107,8 +107,12 @@ registers which draws each family:
 - **A guess from the name** for anything else (condensed, script, slab, monospaced or serif), registered
   per document when it opens; plain sans names keep Source Sans 3.
 
-Symbol fonts are handled in the importer: a Wingdings or Symbol bullet becomes the Unicode character it
-draws (`crates/foliolum-pub/src/symbols.rs`). The gate runs without installed fonts by default and lists
+Symbol fonts are handled in the importer: a bullet or text set in Wingdings or Symbol becomes the Unicode
+characters it draws, and that text takes the surrounding text font (`crates/foliolum-pub/src/symbols.rs`,
+built from Unicode's own mapping documents). DesignCraft draws each character with a loaded font that
+has it; Noto Sans Symbols and Noto Sans Symbols 2 are bundled for these (crosses, stars, arrows, check
+marks, circled numbers). Codes with no mapping (Webdings, Wingdings 2 and 3 for now) are counted in an
+import warning. The gate runs without installed fonts by default and lists
 each file's families and what draws them, plus how much text doesn't fit its frame (overset).
 
 ## .pub import

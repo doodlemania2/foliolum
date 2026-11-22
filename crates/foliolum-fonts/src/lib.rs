@@ -51,6 +51,7 @@ pub const FONT_PATHS: &[&str] = &[
     "comicneue/ComicNeue-BoldItalic.ttf",
     "questrial/Questrial-Regular.ttf",
     "notosanssymbols2/NotoSansSymbols2-Regular.ttf",
+    "notosanssymbols/NotoSansSymbols[wght].ttf",
     "robotocondensed/RobotoCondensed[wght].ttf",
     "robotocondensed/RobotoCondensed-Italic[wght].ttf",
     "robotoslab/RobotoSlab[wght].ttf",
@@ -70,6 +71,7 @@ pub const LICENSE_PATHS: &[&str] = &[
     "comicneue/OFL.txt",
     "questrial/OFL.txt",
     "notosanssymbols2/OFL.txt",
+    "notosanssymbols/OFL.txt",
     "robotocondensed/OFL.txt",
     "robotoslab/LICENSE.txt",
     "dancingscript/OFL.txt",
@@ -115,6 +117,7 @@ pub const FONTS: &[(&str, &[u8])] = embedded![
     "comicneue/ComicNeue-BoldItalic.ttf",
     "questrial/Questrial-Regular.ttf",
     "notosanssymbols2/NotoSansSymbols2-Regular.ttf",
+    "notosanssymbols/NotoSansSymbols[wght].ttf",
     "robotocondensed/RobotoCondensed[wght].ttf",
     "robotocondensed/RobotoCondensed-Italic[wght].ttf",
     "robotoslab/RobotoSlab[wght].ttf",
@@ -135,6 +138,7 @@ pub const LICENSES: &[(&str, &[u8])] = embedded![
     "comicneue/OFL.txt",
     "questrial/OFL.txt",
     "notosanssymbols2/OFL.txt",
+    "notosanssymbols/OFL.txt",
     "robotocondensed/OFL.txt",
     "robotoslab/LICENSE.txt",
     "dancingscript/OFL.txt",
@@ -344,6 +348,22 @@ mod tests {
         let db = FontDb::global();
         for (family, substitute, _) in SUBSTITUTES {
             assert!(db.has_family(substitute), "{family} → {substitute} is not bundled");
+        }
+    }
+
+    #[test]
+    fn symbols_from_symbol_fonts_are_drawn_by_a_bundled_font() {
+        // As in the browser: no installed fonts, only the bundled ones and DesignCraft's own.
+        let db = FontDb::with_font_dirs(Vec::new());
+        db.set_system_fallback(false);
+        for (_, bytes) in FONTS {
+            db.add_font(bytes.to_vec());
+        }
+        // What foliolum-pub maps Wingdings and Symbol text to that parish documents use: crosses,
+        // the Star of David, a telephone, an envelope, scissors, check marks and boxes, circled
+        // numbers, stars, arrows, Greek, ©, ® and ™, the degree sign, card suits.
+        for c in "✠✞🕆🕈✡🕿✆✉✂✔✓☑☒①❶★✪⇨☞●◆❖αβπΣΩ©®™°±♥♣→".chars() {
+            assert!(db.fallback_for(c, u32::MAX, None).is_some(), "no bundled font draws {c} (U+{:04X})", c as u32);
         }
     }
 

@@ -318,3 +318,18 @@ fn unknown_formatting_is_a_note_with_fields_and_preserves_document_text() {
     assert!(imp.notes[0].contains("defaults [0x30]; runs [0xEE]"));
     assert_eq!(imp.document.stories.values().next().unwrap().text, "Text stays");
 }
+
+/// Foliolum: text set in a symbol font becomes the Unicode characters it draws, and is no longer
+/// set in the symbol font (src/symbols.rs). The test store's only font is "Symbol".
+#[test]
+fn text_in_a_symbol_font_becomes_what_it_draws() {
+    use support::list;
+    let symbol = list(0x24, 0x88, &list(0, 0x88, &number(0, 0)));
+    for (run, default) in [(&symbol[..], &[][..]), (&[][..], &symbol[..])] {
+        let imp = import_pub(&character_publication(run, default)).unwrap();
+        let story = imp.document.stories.values().next().unwrap();
+        assert_eq!(story.text, "Μιξεδ Χασε");
+        assert_ne!(story.char_format_at(0).over.font_family.as_deref(), Some("Symbol"));
+        assert!(!imp.warnings.iter().any(|w| w.contains("symbol font")), "{:?}", imp.warnings);
+    }
+}
