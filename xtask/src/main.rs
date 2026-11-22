@@ -25,7 +25,13 @@
 //! our own writer, with a reference beside each in the layout-export shape, for `gate` to check.
 //! They test robustness, not fidelity to Publisher, and don't count toward the Phase 1 gate.
 //!
+//!   cargo xtask favicon
+//!
+//! `favicon` renders apps/foliolum-web/favicon.svg into favicon.ico beside it (favicon.rs). Run it
+//! after changing the SVG; a test fails until you do.
+//!
 //! Exit codes: 0 every file passes, 1 usage or I/O error, 2 at least one file does not pass.
+mod favicon;
 mod gate;
 mod pubwork;
 mod synth;
@@ -51,9 +57,22 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+        Some("favicon") => {
+            let web = Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps/foliolum-web");
+            match favicon::write(&web.join("favicon.svg"), &web.join("favicon.ico")) {
+                Ok(()) => {
+                    println!("wrote {}", web.join("favicon.ico").display());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("xtask favicon: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         _ => {
             eprintln!(
-                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH...\n       cargo xtask synth [--count N] [--seed S] OUT"
+                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH...\n       cargo xtask synth [--count N] [--seed S] OUT\n       cargo xtask favicon"
             );
             ExitCode::from(1)
         }

@@ -81,6 +81,17 @@ else
   expect_header '^content-encoding: gzip' "/fonts/$font (gzip)"
 fi
 
+# The tab icon: linked from the page, and at the fixed names browsers ask for.
+grep -qF 'href="favicon.svg"' <<<"$page" || fail "/: no favicon link"
+get /favicon.ico
+expect_status 200 /favicon.ico
+expect_header '^content-type: image/x-icon' /favicon.ico
+expect_header '^cache-control: public, max-age=86400' /favicon.ico
+get /favicon.svg
+expect_status 200 /favicon.svg
+expect_header '^content-type: image/svg+xml' /favicon.svg
+expect_header "^content-security-policy: default-src 'none'" /favicon.svg
+
 get /no-such-file.js
 expect_status 404 /no-such-file.js
 

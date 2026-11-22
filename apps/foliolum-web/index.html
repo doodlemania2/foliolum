@@ -7,6 +7,12 @@
   <link data-trunk rel="rust" data-bin="foliolum-web" data-wasm-opt="z" data-weak-refs data-cargo-profile="web" />
   <!-- The bundled fonts, fetched after start (src/fonts_web.rs), with their licences. -->
   <link data-trunk rel="copy-dir" href="../../crates/foliolum-fonts/web" data-target-path="fonts" />
+  <!-- Foliolum's mark; favicon.ico is rendered from the SVG by `cargo xtask favicon`. Copied under fixed
+       names, because browsers ask for /favicon.ico on their own. -->
+  <link data-trunk rel="copy-file" href="favicon.svg" />
+  <link data-trunk rel="copy-file" href="favicon.ico" />
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #262626; }
     #foliolum_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
