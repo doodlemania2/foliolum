@@ -24,3 +24,6 @@ pico-args = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+# synth.rs writes publications with foliolum-pub's test writer (compound files, zlib).
+cfb = { workspace = true }
+miniz_oxide = { workspace = true }

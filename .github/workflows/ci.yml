@@ -1,5 +1,6 @@
 # Build and test Foliolum on our Linux runner: DesignCraft at the pin with our patches, the workspace
-# tests, the Phase 1 gate's machine checks on the public pubsmith and dev22 sets, and the web build.
+# tests, the Phase 1 gate's machine checks on the public pubsmith and dev22 sets and on the synthetic
+# stress set, and the web build.
 #
 # This repo is public and the runner is ours, so (house rule for public repos on self-hosted runners):
 #   - no pull_request trigger at all: fork code never reaches the runner;
@@ -93,6 +94,13 @@ jobs:
           done
           [[ ${#files[@]} -eq 19 ]] || { echo "expected 19 files, found ${#files[@]}" >&2; exit 1; }
           cargo xtask gate --set dev22 --names --no-review "${files[@]}"
+
+      - name: Gate machine checks, stress set (50 synthetic publications)
+        # Generated from a fixed seed by our own writer (xtask/src/synth.rs), each with a reference
+        # beside it. A robustness test, not part of the Phase 1 gate (#25).
+        run: |
+          cargo xtask synth fixtures/stress
+          cargo xtask gate --set stress --names --no-review fixtures/stress
 
       - name: Clippy (web)
         run: cargo clippy -p foliolum-web --target wasm32-unknown-unknown -- -D warnings

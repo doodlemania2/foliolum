@@ -313,7 +313,7 @@ pub fn markdown(set: &str, pin: &str, results: &[FileResult]) -> String {
         count(&|r| r.recognizable.is_pass()),
     );
     s += &format!(
-        "Completeness is judged against Publisher's layout export for {} files and against Pubwork's reader for {}.\n\n",
+        "Completeness is judged against a layout export beside the file (`truth/<name>.json`) for {} files and against Pubwork's reader for {}.\n\n",
         count(&|r| r.reference == Some("layout export")),
         count(&|r| r.reference == Some("Pubwork")),
     );
