@@ -15,8 +15,13 @@
 //!   --no-review     exit by the machine checks alone (opens, complete, exports), not the reviewer's
 //!                   verdict. For CI on the public dev sets; the table still shows every check
 //!
+//! Completeness is judged against Publisher's layout export when the file has one, otherwise against
+//! Pubwork's reader (pubwork.rs), which needs `gate/fetch-fixtures.sh` and Node (`node` on the path, or
+//! `$FOLIOLUM_NODE`).
+//!
 //! Exit codes: 0 every file passes, 1 usage or I/O error, 2 at least one file does not pass.
 mod gate;
+mod pubwork;
 mod truth;
 
 use std::path::{Path, PathBuf};
@@ -98,7 +103,11 @@ fn run_gate(mut args: pico_args::Arguments) -> Result<ExitCode, String> {
         Err(_) => serde_json::json!({}),
     };
     std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
-    let opts = gate::Options { out: out.clone(), names, verdicts };
+    let reader = pubwork::Reader::find(&root);
+    if let Err(why) = &reader {
+        eprintln!("note: {why}; files without a layout export can't be checked for completeness");
+    }
+    let opts = gate::Options { out: out.clone(), names, verdicts, pubwork: reader };
 
     // The importer and renderer are caught per file; keep their panic messages out of the report stream.
     let default_hook = std::panic::take_hook();

@@ -1,8 +1,9 @@
 //! The Phase 1 gate (docs/architecture.md, "The Phase 1 gate"). Per .pub file:
 //!
 //! - **opens:** foliolum-pub imports it without error (or panic).
-//! - **complete:** pages, page sizes and every element's presence and text match a reference, which is
-//!   Publisher's own layout export (`truth/<name>.json`) when the file has one.
+//! - **complete:** pages, page sizes and every element's presence and text match a reference: Publisher's
+//!   own layout export (`truth/<name>.json`) when the file has one, otherwise what Pubwork's independent
+//!   reader finds on each page (pubwork.rs).
 //! - **exports:** DesignCraft writes a PDF whose page count and sizes match the import.
 //! - **recognizable:** a person looked at the rendered pages (`gate/verdicts.json`, keyed by SHA-256).
 //!
@@ -15,7 +16,7 @@ use serde::Serialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
-use crate::truth;
+use crate::{pubwork, truth};
 
 /// Longest side of a review render, in pixels.
 const REVIEW_PX: u32 = 1400;
@@ -61,6 +62,15 @@ pub struct FileResult {
     pub recognizable: Check,
     pub pass: bool,
     pub truth: Option<truth::Score>,
+    /// Which reference judged completeness: "layout export" or "Pubwork".
+    pub reference: Option<&'static str>,
+    /// Every way the import differs from Pubwork's reader, whichever reference judged completeness
+    /// (with a layout export these are for information: they show how far the two readers agree).
+    pub pubwork_diffs: Vec<String>,
+    /// When the readers differ, both page summaries, to see why (results.jsonl only; it never leaves
+    /// target/, because the summaries hold the file's text).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pubwork_pages: Option<PagePair>,
     /// Font families the text asks for (characters set in each) and the family that draws them here.
     pub fonts: Vec<FontUse>,
     /// Characters that don't fit their frames as drawn here, and so are missing from the PDF.
@@ -69,6 +79,12 @@ pub struct FileResult {
     pub overset_chars: Option<usize>,
     /// Every difference the reference comparison found, for the per-file JSON (not the table).
     pub notes: Vec<String>,
+}
+
+#[derive(Serialize, Debug)]
+pub struct PagePair {
+    pub ours: Vec<pubwork::Page>,
+    pub pubwork: Vec<pubwork::Page>,
 }
 
 #[derive(Serialize, Debug, Clone)]
@@ -94,6 +110,8 @@ pub struct Options {
     pub names: bool,
     /// Reviewer verdicts by SHA-256.
     pub verdicts: serde_json::Value,
+    /// Pubwork's reader, or why it can't run here.
+    pub pubwork: Result<pubwork::Reader, String>,
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -133,6 +151,9 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
         recognizable: Check::Unchecked("did not open".into()),
         pass: false,
         truth: None,
+        reference: None,
+        pubwork_diffs: Vec::new(),
+        pubwork_pages: None,
         fonts: Vec::new(),
         overset_chars: None,
         notes: Vec::new(),
@@ -161,12 +182,41 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
     r.fonts = font_uses(&doc);
     let sizes: Vec<(f64, f64)> = (0..doc.page_count()).filter_map(|i| doc.page(i).map(|p| (p.width, p.height))).collect();
 
-    // 2. Complete, against Publisher's layout export when there is one.
+    // 2. Complete, against Publisher's layout export when there is one, otherwise Pubwork's reader.
+    let pubwork = opts.pubwork.as_ref().map_err(String::clone).and_then(|reader| reader.read(path)).and_then(|reading| {
+        // A reference that sees nothing can't vouch for anything (libmspub reads some files as empty).
+        if reading.pages.is_empty() && pubwork::ours(&doc).iter().any(|p| !pubwork::is_empty(p)) {
+            return Err("Pubwork's reader found no pages in this file".into());
+        }
+        Ok(reading)
+    });
+    let pubwork = pubwork.map(|reading| {
+        let ours = pubwork::ours(&doc);
+        let (diffs, notes) = pubwork::compare(&ours, &reading.pages);
+        r.notes.extend(notes.into_iter().map(|n| format!("Pubwork: {n}")));
+        if !diffs.is_empty() {
+            r.pubwork_pages = Some(PagePair { ours, pubwork: reading.pages });
+        }
+        (diffs, reading.partial)
+    });
+    if let Ok((diffs, _)) = &pubwork {
+        r.pubwork_diffs = diffs.clone();
+    }
     let truth_path =
         path.parent().unwrap_or(Path::new(".")).join("truth").join(format!("{}.json", path.file_stem().unwrap_or_default().to_string_lossy()));
     r.complete = match std::fs::read_to_string(&truth_path).ok().and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok()) {
-        None => Check::Unchecked("no reference for this file".into()),
+        None => match pubwork {
+            Err(why) => Check::Unchecked(format!("no layout export; {why}")),
+            Ok((diffs, partial)) => {
+                r.reference = Some("Pubwork");
+                if partial {
+                    r.notes.push("Pubwork read this file only in part".into());
+                }
+                if diffs.is_empty() { Check::Pass } else { Check::Fail(format!("vs Pubwork: {}", diffs.join("; "))) }
+            }
+        },
         Some(t) => {
+            r.reference = Some("layout export");
             let mut s = truth::Score::default();
             let mut notes = Vec::new();
             truth::score(&doc, &t, &mut s, &mut notes);
@@ -179,7 +229,7 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
                 fails.push(format!("{} of {} text frames differ", s.text_total - s.text_ok, s.text_total));
             }
             r.truth = Some(s);
-            r.notes = notes;
+            r.notes.extend(notes);
             if fails.is_empty() { Check::Pass } else { Check::Fail(fails.join("; ")) }
         }
     };
@@ -263,6 +313,11 @@ pub fn markdown(set: &str, pin: &str, results: &[FileResult]) -> String {
         count(&|r| r.recognizable.is_pass()),
     );
     s += &format!(
+        "Completeness is judged against Publisher's layout export for {} files and against Pubwork's reader for {}.\n\n",
+        count(&|r| r.reference == Some("layout export")),
+        count(&|r| r.reference == Some("Pubwork")),
+    );
+    s += &format!(
         "Overset (text that doesn't fit its frame, so isn't in the PDF; reported, not failed on): {} characters in {} files.\n\n",
         results.iter().filter_map(|r| r.overset_chars).sum::<usize>(),
         count(&|r| r.overset_chars.is_some_and(|n| n > 0)),
@@ -290,7 +345,7 @@ mod tests {
     use super::*;
 
     fn opts(dir: &Path, verdicts: serde_json::Value) -> Options {
-        Options { out: dir.to_path_buf(), names: true, verdicts }
+        Options { out: dir.to_path_buf(), names: true, verdicts, pubwork: Err("not in unit tests".into()) }
     }
 
     fn scratch(name: &str) -> PathBuf {
@@ -343,6 +398,29 @@ mod tests {
         assert_eq!(overset_count("the story in frame 4: 12 character(s) do not fit and are not in the export"), Some(12));
         assert_eq!(overset_count("5 character(s) of a story do not fit their frame and are not in the export"), Some(5));
         assert_eq!(overset_count("something else"), None);
+    }
+
+    /// The reader, end to end (CI's dev22 step checks real files against it): with no layout export,
+    /// Pubwork judges completeness.
+    /// Needs the reader fetched (gate/fetch-fixtures.sh) and Node; skipped without them, except in CI.
+    #[test]
+    fn a_reader_that_finds_nothing_leaves_completeness_unchecked() {
+        let reader = match pubwork::Reader::find(&crate::root()) {
+            Ok(r) => r,
+            Err(why) if std::env::var_os("CI").is_none() => {
+                eprintln!("skipped: {why}");
+                return;
+            }
+            Err(why) => panic!("{why}"),
+        };
+        let d = scratch("pubwork");
+        let mut o = opts(&d, json!({}));
+        o.pubwork = Ok(reader);
+        // hello.pub is written from scratch by foliolum-pub's tests, and libmspub finds no pages in
+        // it: a reference that sees nothing leaves completeness unchecked, never passed.
+        let r = run_file(Path::new(HELLO), &o);
+        assert_eq!(r.complete, Check::Unchecked("no layout export; Pubwork's reader found no pages in this file".into()));
+        assert!(!r.machine_checks_pass());
     }
 
     #[test]
