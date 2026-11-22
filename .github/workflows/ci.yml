@@ -1,5 +1,5 @@
 # Build and test Foliolum on our Linux runner: DesignCraft at the pin with our patches, the workspace
-# tests, the Phase 1 gate's machine checks on the public pubsmith set, and the web build.
+# tests, the Phase 1 gate's machine checks on the public pubsmith and dev22 sets, and the web build.
 #
 # This repo is public and the runner is ours, so (house rule for public repos on self-hosted runners):
 #   - no pull_request trigger at all: fork code never reaches the runner;
@@ -50,16 +50,49 @@ jobs:
       - name: Clippy (native)
         run: cargo clippy --workspace --all-targets -- -D warnings
 
-      - name: Tests
-        run: cargo test --workspace
-
-      - name: Gate fixtures (pubsmith, pinned)
+      - name: Gate fixtures (pubsmith, dev22 and Pubwork's reader, pinned)
         run: gate/fetch-fixtures.sh
 
-      - name: Gate machine checks (opens, complete, exports)
+      - name: Node for the Pubwork reader
+        # The gate's second reference runs under Node (gate/pubwork/oracle.mjs), and the runner's own
+        # Node is too old for ES modules. A pinned build, checked and kept under $HOME between runs.
+        env:
+          NODE_VERSION: v22.23.4
+          NODE_SHA256: b8492284c76a54baf58d61668dd0e41ee0fc98adabf9503d30f05d08f55b4406
+        run: |
+          set -euo pipefail
+          dir="$HOME/.cache/node-$NODE_VERSION"
+          if [[ ! -x "$dir/bin/node" ]]; then
+            tmp="$(mktemp -d)"
+            curl -fsSL --retry 3 -o "$tmp/node.tar.gz" "https://nodejs.org/dist/$NODE_VERSION/node-$NODE_VERSION-linux-x64.tar.gz"
+            echo "$NODE_SHA256  $tmp/node.tar.gz" | sha256sum -c -
+            mkdir -p "$dir"
+            tar -xzf "$tmp/node.tar.gz" -C "$dir" --strip-components 1
+            rm -rf "$tmp"
+          fi
+          "$dir/bin/node" --version
+          echo "FOLIOLUM_NODE=$dir/bin/node" >> "$GITHUB_ENV"
+
+      - name: Tests
+        # After the fixtures and Node: one gate test runs Pubwork's reader.
+        run: cargo test --workspace
+
+      - name: Gate machine checks, pubsmith (opens, complete, exports)
         # Every pubsmith file must open, match Publisher's layout export and export a print PDF. The
         # reviewer's verdict isn't a machine check, so --no-review.
         run: cargo xtask gate --set pubsmith --names --no-review fixtures/pubsmith
+
+      - name: Gate machine checks, dev22 (against Pubwork's reader)
+        # These files have no layout export, so completeness is checked against Pubwork's reader. The
+        # three Publisher 97-2000 files are left out: foliolum-pub refuses them by design.
+        run: |
+          set -euo pipefail
+          files=()
+          for f in fixtures/dev22/*.pub; do
+            case "$(basename "$f")" in poi-Sample98.pub|poi-Sample2000.pub|lo-fdo59355-1.pub) ;; *) files+=("$f") ;; esac
+          done
+          [[ ${#files[@]} -eq 19 ]] || { echo "expected 19 files, found ${#files[@]}" >&2; exit 1; }
+          cargo xtask gate --set dev22 --names --no-review "${files[@]}"
 
       - name: Clippy (web)
         run: cargo clippy -p foliolum-web --target wasm32-unknown-unknown -- -D warnings

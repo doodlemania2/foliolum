@@ -153,8 +153,11 @@ set, Publisher's own exports made by someone else.
   neutral label, and its results.
 - **Per file, `cargo xtask gate <dir>` records:**
   1. *Opens:* `foliolum-pub` imports it without error.
-  2. *Complete:* page count, page size, and per-page text, picture and shape counts match the Pubwork
-     reader (text compared after whitespace normalisation). Any difference is listed, not averaged away.
+  2. *Complete:* against Publisher's layout export when the file has one (pubsmith's), otherwise the
+     Pubwork reader: page count, page size, and per-page text, picture, shape and table counts, and the
+     text itself after whitespace normalisation. Every difference is listed, not averaged away. Against
+     Pubwork, having less than the reader found fails and having more is noted, because the reader has
+     blind spots (newer WordArt) and the reviewer judges what is drawn. `gate/README.md` has the rules.
   3. *Exports:* DesignCraft writes a print PDF whose page count and sizes match the import.
   4. *Recognizable:* a per-page PNG is rendered for review, and the reviewer's verdict is stored with the
      file's hash. This is the one judgement a machine does not make.
@@ -186,14 +189,15 @@ set, Publisher's own exports made by someone else.
 | trunk | 0.22.1 | `cargo install --locked trunk` |
 | wasm-bindgen | 0.2.129 | trunk downloads it; pinned in `apps/foliolum-web/Trunk.toml` |
 | wasm-opt | binaryen version_131 | trunk downloads it; pinned in `Trunk.toml` |
-| Node | 22 | already on the runner; used for the Pubwork reader oracle |
+| Node | 22.23.4 | runs the Pubwork reader for the gate; CI installs this pinned build (the runner's own Node is 10) |
 
 CI (`.github/workflows/ci.yml`) runs on `doodlemanage-foliolum` (label `tdp-linux`), a persistent
-Ubuntu container (4 CPUs, 8 GB since 2026-11-21) with only Node installed. The job installs the Debian packages it needs
+Ubuntu container (4 CPUs, 8 GB since 2026-11-21) with only an old Node installed. The job installs the Debian packages it needs
 when they are missing (a C compiler, pkg-config, libwayland-dev), then rustup and the toolchain
-`rust-toolchain.toml` names, and trunk. Cargo's home and the target directory stay under `$HOME` between
+`rust-toolchain.toml` names, trunk, and the pinned Node the gate's Pubwork reader needs. Cargo's home and the target directory stay under `$HOME` between
 runs as the cache. It runs fmt, clippy (native and wasm), the workspace tests, the gate's machine checks
-on the pubsmith set (`cargo xtask gate --no-review`) and the web build. That web build turns off the
+on the pubsmith set and on the 19 dev22 files foliolum-pub opens (`cargo xtask gate --no-review`), and
+the web build. That web build turns off the
 `web` profile's fat LTO (`CARGO_PROFILE_WEB_LTO=off`) and runs as a non-release trunk build, which
 skips wasm-opt: it only proves the app builds, and on the runner's first 2 CPUs the LTO link alone ran past 23 minutes and
 wasm-opt took 20. The first run on a cold runner took about two hours (toolchain

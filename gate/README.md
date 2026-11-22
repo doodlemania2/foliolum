@@ -5,18 +5,50 @@ recorded result per file. The design is in `docs/architecture.md`, "The Phase 1 
 
 ```sh
 fork/fetch.sh                      # DesignCraft at the pin
-gate/fetch-fixtures.sh             # pubsmith's 142 Publisher-made fixtures into fixtures/ (gitignored)
+gate/fetch-fixtures.sh             # the public dev sets and Pubwork's reader into fixtures/ (gitignored)
 cargo xtask gate --set pubsmith --names fixtures/pubsmith
+cargo xtask gate --set dev22 --names fixtures/dev22
 cargo xtask gate --set contributed --record /path/to/contributed/files
 ```
 
-Each file gets four checks: **opens**, **complete** (against Publisher's layout export when the file has
-one), **exports** (the PDF read back: page count and sizes), and **recognizable** (a person's verdict).
-A file passes only when all four pass. A check that can't be made yet is shown as `–` and is never a pass.
+Each file gets four checks: **opens**, **complete** (against a reference, below), **exports** (the PDF
+read back: page count and sizes), and **recognizable** (a person's verdict). A file passes only when all
+four pass. A check that can't be made yet is shown as `–` and is never a pass.
 
-CI runs `cargo xtask gate --set pubsmith --names --no-review fixtures/pubsmith`: `--no-review` sets the
-exit code by the three machine checks alone, since only a person can give the fourth, and every pubsmith
-file must pass them. The table still shows all four.
+`fetch-fixtures.sh` fetches, each at a pinned commit and checked by SHA-256:
+
+- `fixtures/pubsmith/`: pubsmith's 142 fixtures, made with Publisher, each with Publisher's layout export;
+- `fixtures/dev22/`: the spike's 22 public files (21 from Apache POI, one from LibreOffice), no exports;
+- `fixtures/pubwork/`: Pubwork's patched libmspub reader (MPL-2.0), the second reference.
+
+CI runs the gate with `--no-review` on pubsmith and on the 19 dev22 files that open (the other three are
+Publisher 97–2000 files, which foliolum-pub refuses by design). `--no-review` sets the exit code by the
+three machine checks alone, since only a person can give the fourth, and every file in those runs must
+pass them. The table still shows all four.
+
+## The completeness references
+
+A file with a layout export (`truth/<name>.json` beside it) is scored against it. Any other file,
+including every contributed one, is checked against **Pubwork's reader**, an independent reading of the
+same file: `gate/pubwork/oracle.mjs` runs it under Node (`node` on the path, or `$FOLIOLUM_NODE`) and
+summarises each page, and `xtask/src/pubwork.rs` summarises the import the same way and compares:
+
+- page count and sizes;
+- per page, the number of text boxes, pictures, shapes and tables;
+- per page, the text: each story once, and each table cell, whitespace collapsed.
+
+Having **less** than the reader found (a missing text box, picture, shape, table or piece of text, or
+changed text) fails. Having **more** is noted in `results.jsonl`, not failed: the reader doesn't see
+newer WordArt, for one, and the reviewer judges what is drawn. Where libmspub draws one thing as two,
+the summaries count it the way foliolum-pub imports it: a text box's fill or holding shape, an outline
+drawn over a shape or picture, a picture cropped to a shape, and WordArt as text. A shortfall in shapes
+is excused, with a note, up to the number of extra text boxes we have, because WordArt the reader can't
+read may reach it as a bare shape. Empty pages the reader leaves out are noted. If the reader can't read
+a file, or finds no pages where we found content, completeness is unchecked: never a pass.
+
+With these rules Pubwork finds no loss in any of the 142 pubsmith imports, which the layout export
+already confirms (one, `wordart__line-white`, only through the WordArt rule), or in the 19 dev22 files
+that open. `results.jsonl` keeps both page summaries whenever the readers differ.
 
 The gate uses only DesignCraft's and Foliolum's bundled fonts, as the browser does, so its results don't
 depend on the machine (`--system-fonts` adds the installed ones). `results.jsonl` lists each file's font
