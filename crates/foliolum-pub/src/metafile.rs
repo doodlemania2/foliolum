@@ -1283,6 +1283,3 @@ pub(crate) mod tests {
         assert!(to_svg(0xF01C, &blip(&sample_wmf(), [0; 4], (1, 1))).is_none());
     }
 }
-
-
-

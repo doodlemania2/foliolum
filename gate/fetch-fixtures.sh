@@ -6,8 +6,8 @@
 #   fixtures/dev22/      the spike's 22 public test files: 21 from Apache POI's test-data/publisher
 #                        (Apache-2.0) and one from LibreOffice's libmspub tests (MPL-2.0), at the pins below.
 #                        No layout exports, so the gate checks them against Pubwork's reader.
-#   fixtures/lobz/       33 real-world files people attached to LibreOffice import bugs
-#                        (bugs.documentfoundation.org) so that importers would get them right, by
+#   fixtures/lobz/       with --lobz only: 33 real-world files people attached to LibreOffice import
+#                        bugs (bugs.documentfoundation.org) so that importers would get them right, by
 #                        attachment id. They can carry real names, so they are never committed.
 #   fixtures/pubwork/    Pubwork's patched libmspub WebAssembly reader (Daffyllas/Pubwork, MPL-2.0): the
 #                        gate's second reference (gate/pubwork/oracle.mjs runs it under Node).
@@ -15,6 +15,8 @@
 # pubsmith is MIT, but its THIRD-PARTY-NOTICES.md says these files carry Microsoft material outside that
 # licence, so we fetch them for local testing and never vendor them. Their truth JSON scores imports
 # only; it is never used to work out the file format.
+#
+# Usage: gate/fetch-fixtures.sh [--lobz]
 #
 # Then: cargo xtask gate --set pubsmith --names fixtures/pubsmith
 #       cargo xtask gate --set dev22 --names fixtures/dev22
@@ -95,6 +97,9 @@ fetch "https://raw.githubusercontent.com/LibreOffice/core/$LO_COMMIT/writerperfe
   "$ROOT/fixtures/dev22/lo-fdo59355-1.pub" 79f9a8d99ed18faa174fa7200dbe91627015e2b77439a20421119abc128d62f7
 echo "==> $(find "$ROOT/fixtures/dev22" -name '*.pub' | wc -l | tr -d ' ') .pub files in $ROOT/fixtures/dev22"
 
+# lobz only on request: CI cleans fixtures/ every run, and these come from LibreOffice's Bugzilla,
+# which shouldn't serve 45 MB to every push. CI doesn't gate on them (gate/README.md).
+if [[ "${1:-}" == "--lobz" ]]; then
 echo "==> lobz (LibreOffice Bugzilla attachments)"
 mkdir -p "$ROOT/fixtures/lobz"
 while read -r bug att sha; do
@@ -135,6 +140,7 @@ done <<'LIST'
 163388 197010 e07f44af250244ffc4a2e5abf35e9ee74493bdb38a60b6cc060c1bdfe6195919
 LIST
 echo "==> $(find "$ROOT/fixtures/lobz" -name '*.pub' | wc -l | tr -d ' ') .pub files in $ROOT/fixtures/lobz"
+fi
 
 echo "==> Pubwork's reader at ${PUBWORK_COMMIT:0:12}"
 mkdir -p "$ROOT/fixtures/pubwork"

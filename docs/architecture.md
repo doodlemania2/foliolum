@@ -144,14 +144,22 @@ depend on a copy of it being available (Derek, 2026-11-16). We make no Publisher
 references are the files themselves, two independent readers, DesignCraft's engine and, for one public
 set, Publisher's own exports made by someone else.
 
-- **Files:** real-world `.pub` files contributed with permission, plus two public development sets:
-  - the 22 test files from the NiftyDesign and Pubwork repositories;
+- **Files:** real-world `.pub` files. No contributed files are coming (Derek, 2026-11-23), so the 50 is
+  counted over two public sets of files people made in Publisher for their own use, 55 in all; any
+  contributed files would join them:
+  - the 22 test files from the NiftyDesign and Pubwork repositories (dev22);
+  - **33 files attached to LibreOffice import bugs** (lobz; `gate/README.md`): bulletins, a missal,
+    newsletters, flyers, cards, certificates. Fetched by attachment id and SHA-256 on request, never
+    committed.
+
+  Two more development sets don't count toward the 50:
   - **pubsmith's 142 fixtures** (`FuncularLabs/pubsmith`, `tests/fixtures/pub/`, pinned at
     `0ccdf27fc3f381f0897515e226ea485165c699b2`). They were made with Publisher by that project's scripts
     and ship with Publisher's layout export of each file (`truth/*.json`) and a few renders (`golden/`).
     Their notices say the files carry Microsoft material outside pubsmith's MIT licence, so they are
     fetched at the pin into a gitignored folder, **never vendored**. Their truth JSON is used to score
     imports, never to work out the file format (the same rule NiftyDesign follows).
+  - **the stress set**: 50 publications our own writer makes up (`xtask/src/synth.rs`), for robustness.
 
   Real files can carry real names and contact details, so they are **never committed**. The harness
   reads them from a directory given on the command line, and `gate/` keeps only each file's SHA-256, a

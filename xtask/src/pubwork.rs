@@ -27,6 +27,9 @@ pub struct Page {
     pub table: usize,
     /// The page's text, one entry per story (and per table cell), whitespace collapsed, sorted.
     pub stories: Vec<String>,
+    /// Ours only: the page has nothing of its own, only what its master page shows.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub only_master: bool,
 }
 
 #[derive(Deserialize, Debug)]
@@ -87,6 +90,13 @@ fn leaves<'a>(it: &'a Item, out: &mut Vec<&'a Item>) {
     }
 }
 
+/// How many items the page has of its own (not counting its master page's).
+fn own_items(d: &Document, abs: usize) -> usize {
+    let Some((si, pi)) = d.page_loc(abs) else { return 0 };
+    let Some(spread) = d.spreads.get(si) else { return 0 };
+    spread.items.iter().filter(|it| spread.pages.len() == 1 || spread.page_at_x(it.bounds().center().x) == Some(pi)).count()
+}
+
 /// The items drawn on one page: its own and those of the parent pages it shows (libmspub draws a
 /// master page's items on every page that uses it).
 pub fn page_items(d: &Document, abs: usize) -> Vec<&Item> {
@@ -119,6 +129,7 @@ pub fn ours(d: &Document) -> Vec<Page> {
     for abs in 0..d.page_count() {
         let Some(page) = d.page(abs) else { continue };
         let mut s = Page { w: page.width, h: page.height, ..Page::default() };
+        s.only_master = own_items(d, abs) == 0;
         let mut seen = BTreeSet::new();
         for it in page_items(d, abs) {
             match &it.content {
@@ -166,7 +177,9 @@ pub fn compare(ours: &[Page], theirs: &[Page]) -> (Vec<String>, Vec<String>) {
     let kept: Vec<Page>;
     let mut ours = ours;
     if ours.len() > theirs.len() {
-        kept = ours.iter().filter(|p| !is_empty(p)).cloned().collect();
+        // A page with only its master's items counts as empty too: the reader leaves out a blank
+        // page at the end of a missal (LibreOffice bug 100639) that shows an empty master text box.
+        kept = ours.iter().filter(|p| !is_empty(p) && !p.only_master).cloned().collect();
         if kept.len() == theirs.len() {
             notes.push(format!("{} empty page(s) that Pubwork's reader doesn't list", ours.len() - kept.len()));
             ours = &kept;
@@ -261,16 +274,18 @@ fn same_text(a: &str, b: &str) -> bool {
 
 /// Entries of `a` that `b` doesn't have, counting repeats.
 fn minus<'a>(a: &'a [String], b: &[String]) -> Vec<&'a String> {
+    // Exact matches first, so the looser `same_text` can't pair a text with the wrong partner
+    // (a reader's `q` with our `•`) and strand its real one.
     let mut left: Vec<&String> = b.iter().collect();
-    a.iter()
-        .filter(|s| match left.iter().position(|t| same_text(t, s)) {
-            Some(i) => {
-                left.swap_remove(i);
-                false
-            }
-            None => true,
-        })
-        .collect()
+    let mut take = |s: &String, same: &dyn Fn(&str, &str) -> bool| match left.iter().position(|t| same(t, s)) {
+        Some(i) => {
+            left.swap_remove(i);
+            false
+        }
+        None => true,
+    };
+    let unmatched: Vec<&'a String> = a.iter().filter(|s| take(s, &|x, y| x == y)).collect();
+    unmatched.into_iter().filter(|s| take(s, &same_text)).collect()
 }
 
 fn clip(s: &str) -> String {
@@ -282,7 +297,7 @@ mod tests {
     use super::*;
 
     fn page(text: usize, image: usize, shape: usize, stories: &[&str]) -> Page {
-        Page { w: 612.0, h: 792.0, text, image, shape, table: 0, stories: stories.iter().map(|s| s.to_string()).collect() }
+        Page { w: 612.0, h: 792.0, text, image, shape, table: 0, stories: stories.iter().map(|s| s.to_string()).collect(), only_master: false }
     }
 
     #[test]
@@ -315,6 +330,28 @@ mod tests {
         assert!(same_text("Championships", "Champion\u{1f}ships"));
         assert!(!same_text("a Item", "q Item"), "two letters still differ");
         assert!(!same_text("❑ Item", "q Items"));
+    }
+
+    #[test]
+    fn exact_matches_pair_before_symbol_letters() {
+        // In this order a greedy match pairs the third `q` with our `•` and strands the reader's `•`.
+        let ours = vec![page(4, 0, 0, &["\u{2751}", "\u{2751}", "\u{2022}", "q"])];
+        let theirs = vec![page(4, 0, 0, &["q", "q", "q", "\u{2022}"])];
+        assert_eq!(compare(&ours, &theirs), (vec![], vec![]));
+    }
+
+    #[test]
+    fn a_page_with_only_its_masters_items_may_be_left_out_by_the_reader() {
+        let mut blank = page(1, 0, 0, &[]);
+        blank.only_master = true;
+        let ours = vec![page(2, 0, 0, &["Gloria"]), blank];
+        let theirs = vec![page(2, 0, 0, &["Gloria"])];
+        let (diffs, notes) = compare(&ours, &theirs);
+        assert!(diffs.is_empty(), "{diffs:?}");
+        assert!(notes.iter().any(|n| n.contains("1 empty page")), "{notes:?}");
+        // A page of its own content the reader leaves out is still a difference.
+        let ours = vec![page(2, 0, 0, &["Gloria"]), page(1, 0, 0, &[])];
+        assert!(!compare(&ours, &theirs).0.is_empty());
     }
 
     #[test]
