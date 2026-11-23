@@ -9,6 +9,7 @@
 //! Clean room: names, groupings and drawings are ours, not Microsoft Publisher's.
 
 pub mod icons;
+pub mod pages;
 pub mod tables;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -140,7 +141,7 @@ fn ribbon_button(app: &mut DesignApp, ui: &mut egui::Ui, b: &Button, t: &Tokens)
     }
 }
 
-/// The document's pages down the left edge, as DesignCraft's Pages panel draws them.
+/// The document's pages down the left edge ([`pages`]).
 fn page_strip(app: &mut DesignApp, ui: &mut egui::Ui) {
     if !simple() || app.session.active().is_none() {
         return;
@@ -151,7 +152,10 @@ fn page_strip(app: &mut DesignApp, ui: &mut egui::Ui) {
         .resizable(false)
         .frame(egui::Frame::NONE.fill(t.panel).stroke(Stroke::new(1.0, t.divider)).inner_margin(egui::Margin::same(4)))
         .show(ui, |ui| {
-            designcraft_ui_egui::panels::pages::show(app, ui);
+            let current = designcraft_ui_egui::canvas::current_page(app);
+            if let Some(abs) = pages::show(app, ui, current) {
+                pages::go_to(app, abs);
+            }
         });
 }
 

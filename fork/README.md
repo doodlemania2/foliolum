@@ -47,6 +47,14 @@ between the app bar and the canvas from outside. DesignCraft's own window is unc
 to need re-applying by hand when upstream changes the app bar. Drop it if upstream gains embedder layout
 hooks.
 
+### 0004-ui-page-thumbnails
+
+`crates/ui-egui`: `panels::pages::page_thumbnail`, a public way into the Pages panel's thumbnail cache
+for one document page. Foliolum's page strip (`crates/foliolum-shell/src/pages.rs`) lists only the
+document's pages and draws its thumbnails from it, so no page is rendered twice and they refresh as the
+panel's do. The cache and its refresh timing are private to the panel. Drop it if upstream makes page
+thumbnails public.
+
 ## Upstream test baseline
 
 At pin `47ef1ec` these DesignCraft UI tests already fail on macOS without any of our patches (`cargo test
