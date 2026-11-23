@@ -256,13 +256,10 @@ fn tcd_entries(bytes: &[u8]) -> Result<Vec<TcdEntry<'_>>> {
     Ok(found)
 }
 
-/// The documented unmerged row-major correspondence between cell records and TCD ordinals.
-fn row_major_unmerged(info: &TableInfo) -> bool {
-    let columns = info.columns.len();
-    !info.cells.is_empty()
-        && columns > 0
-        && info.rows.len().checked_mul(columns) == Some(info.cells.len())
-        && info.cells.iter().enumerate().all(|(i, c)| c.row == i / columns && c.col == i % columns && c.last_row == c.row && c.last_col == c.col)
+/// TCD ordinals follow the cell records in their stored order, whatever their coordinates or spans
+/// (docs/pub-format/tables.md, "Cell text order"); the records must tile the grid exactly.
+fn cells_tile_grid(info: &TableInfo) -> bool {
+    !info.cells.is_empty() && info.validate().is_ok()
 }
 
 /// The documented TCD header and exact size for `cells` cells.
@@ -344,8 +341,8 @@ fn single_association(
     data: &[u8],
     work: &mut usize,
 ) -> std::result::Result<Vec<Range<usize>>, &'static str> {
-    if !row_major_unmerged(info) {
-        return Err("the cells are merged or not in row-major order");
+    if !cells_tile_grid(info) {
+        return Err("the cell records do not tile the grid");
     }
     tcd_header(data, info.cells.len())?;
     let end = info.cells.len().checked_sub(1).and_then(|i| i.checked_mul(4)).and_then(|n| n.checked_add(12)).and_then(|at| u32_at(data, at).ok());
@@ -392,8 +389,8 @@ fn slot_association(
     let Ok(slot) = u16::try_from(slot) else { return Err("the story list position does not fit the TCD slot field") };
     let mut chosen = tcds.iter().filter(|t| t.slot == slot);
     let (Some(entry), None) = (chosen.next(), chosen.next()) else { return Err("the story does not have exactly one TCD entry") };
-    if !row_major_unmerged(info) {
-        return Err("the cells are merged or not in row-major order");
+    if !cells_tile_grid(info) {
+        return Err("the cell records do not tile the grid");
     }
     tcd_header(entry.data, info.cells.len())?;
     let story = q.stories.get(&id).ok_or("the linked story is missing")?;
@@ -494,8 +491,7 @@ impl Builder<'_> {
         let source = self.doc.story(sid).cloned().ok_or_else(|| bad("missing host story"))?;
         let qs = self.q.stories.get(&tid).ok_or_else(|| bad("missing text story"))?;
         let ranges = qs.cell_ranges.as_ref().filter(|r| r.len() == info.cells.len());
-        let merged = info.cells.iter().any(|c| c.row != c.last_row || c.col != c.last_col);
-        let can_assign = ranges.is_some_and(|r| !merged || r.iter().all(Range::is_empty));
+        let can_assign = ranges.is_some();
         let mut table = Table::new(self.doc.alloc(), info.rows.len(), info.columns.len(), 0, 0, rect.width());
         table.options.border = CellStroke::none();
         for (row, height) in table.rows.iter_mut().zip(&info.rows) {
@@ -805,6 +801,28 @@ mod tests {
         vertical.validate().unwrap();
     }
     #[test]
+    fn cell_text_follows_record_order_for_merged_and_reordered_cells() {
+        // As in the real-world certificates: a column inserted later is listed after the others,
+        // and a merged cell is listed last; each TCD ordinal is the record at that position.
+        let mut info = grid();
+        info.cells = vec![
+            CellInfo { row: 1, last_row: 1, col: 1, last_col: 1 },
+            CellInfo { row: 1, last_row: 1, col: 0, last_col: 0 },
+            CellInfo { row: 0, last_row: 0, col: 0, last_col: 1 },
+        ];
+        info.validate().unwrap();
+        let ranges = text_ranges(&table_data(&[5, 11, 17]), &"Value\rLabel\rHead\r".encode_utf16().collect::<Vec<_>>()).unwrap();
+        let imp = import(info, "Value\rLabel\rHead\r", Some(ranges));
+        let host = imp.document.stories.values().next().unwrap();
+        let t = host.tables.values().next().unwrap();
+        assert_eq!(t.cell(0, 0).unwrap().text.text, "Head");
+        assert_eq!(t.cell(0, 0).unwrap().col_span, 2);
+        assert_eq!(t.cell(1, 0).unwrap().text.text, "Label");
+        assert_eq!(t.cell(1, 1).unwrap().text.text, "Value");
+        assert!(!host.text.contains("Head"), "the text is in the cells, not kept after the table");
+        assert!(!imp.warnings.iter().any(|w| w.contains("original text was retained")), "{:?}", imp.warnings);
+    }
+    #[test]
     fn ambiguous_cell_text_stays_after_the_native_table() {
         let imp = import(grid(), "Never lose this\r", None);
         let host = imp.document.stories.values().next().unwrap();
@@ -898,7 +916,11 @@ mod multi_story_text_tests {
                     bytes[56..80].copy_from_slice(&entry);
                 }
                 3 => bytes[104..108].copy_from_slice(&0u32.to_le_bytes()),
-                4 => c.shapes.get_mut(&42).unwrap().table.as_mut().unwrap().cells.swap(0, 1),
+                // Records that overlap instead of tiling the grid (a reordering alone is fine).
+                4 => {
+                    let cells = &mut c.shapes.get_mut(&42).unwrap().table.as_mut().unwrap().cells;
+                    cells[0] = cells[1].clone();
+                }
                 _ => bytes[112..116].copy_from_slice(&5u32.to_le_bytes()),
             }
             let original: Vec<_> = q.stories.iter().map(|(id, s)| (*id, s.units.clone())).collect();

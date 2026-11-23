@@ -26,7 +26,7 @@ OBSERVATION: the current Escher parser returns the following eleven type-201 tab
 | Sample4_2010.pub | 1 | 3 × 2 | 6 | 299 | 2 pages, 7 items, 2 warnings |
 | Sample_2010.pub | 1 | 3 × 2 | 6 | 299 | 2 pages, 7 items, 2 warnings |
 
-OBSERVATION: the importer constructs a native Table anchored in a host story, with row-major cells, individual cell stories and owner-cell spans. It does not create a separate Escher shape per cell. The merged control has a top-row two-column span and empty text; nonempty merged-cell association remains UNKNOWN. Cells have unpainted fills and invisible edges, with a warning that formatting is not decoded. Apache tables also warn that stored endings supplied row positions, maximum difference 9564 EMU, cause unknown.
+OBSERVATION: the importer constructs a native Table anchored in a host story, with row-major cells, individual cell stories and owner-cell spans. It does not create a separate Escher shape per cell. The merged control has a top-row two-column span and empty text; nonempty merged-cell association was later confirmed from real-world files (tables.md, "Cell text order"). Cells have unpainted fills and invisible edges, with a warning that formatting is not decoded. Apache tables also warn that stored endings supplied row positions, maximum difference 9564 EMU, cause unknown.
 
 ## Candidate properties
 

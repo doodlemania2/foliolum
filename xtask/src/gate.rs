@@ -56,6 +56,9 @@ pub struct FileResult {
     pub bytes: usize,
     pub pages: Option<usize>,
     pub warnings: usize,
+    /// What the importer said it could not bring over (results.jsonl only, for diagnosis).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warning_text: Vec<String>,
     pub opens: Check,
     pub complete: Check,
     pub exports: Check,
@@ -145,6 +148,7 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
         bytes: bytes.len(),
         pages: None,
         warnings: 0,
+        warning_text: Vec::new(),
         opens: Check::Unchecked("not run".into()),
         complete: Check::Unchecked("did not open".into()),
         exports: Check::Unchecked("did not open".into()),
@@ -179,6 +183,7 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
     let doc = imported.document;
     r.pages = Some(doc.page_count());
     r.warnings = imported.warnings.len();
+    r.warning_text = imported.warnings.clone();
     r.fonts = font_uses(&doc);
     let sizes: Vec<(f64, f64)> = (0..doc.page_count()).filter_map(|i| doc.page(i).map(|p| (p.width, p.height))).collect();
 
