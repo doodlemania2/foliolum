@@ -74,8 +74,9 @@ contributions are on hold.
    Patch `0003-ui-embedder-shell` (done) adds layout hooks instead of new tables: our bar under the app
    bar, our strip at the left, our controls in the app bar, and a per-frame choice of DesignCraft's bars.
    Foliolum's simple editor (`crates/foliolum-shell`) is a ribbon whose buttons run DesignCraft's
-   existing menu commands, tools and panels, plus the Pages panel down the left. A switch goes to the
-   full editor. No new commands so far.
+   existing menu commands, tools and panels, plus a strip of the document's pages down the left (its
+   thumbnails from the Pages panel's cache, opened up by patch `0004-ui-page-thumbnails`). A switch
+   goes to the full editor. No new commands so far.
 3. **The web build has no control channel or MCP.** The AI phases need one. That is a later patch and
    is out of scope for Phase 1.
 4. **ArtCraft brand assets are trademarks and not open source** (`docs/brand/LICENSE-brand.txt`), and

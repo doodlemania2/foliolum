@@ -37,7 +37,9 @@ On the shared m4: `nice -n 15 env CARGO_BUILD_JOBS=4 trunk build` (about 5 minut
   switch in the app bar. Checked in Chrome (2026-11-20): tabs switch, Text box picks the Type tool,
   buttons grey out when they can't act, and the switch goes to the full editor and back.
   Every button has an icon: DesignCraft's where one fits, otherwise one of ours drawn the same way
-  (`crates/foliolum-shell/src/icons.rs`).
+  (`crates/foliolum-shell/src/icons.rs`). The strip on the left shows only the document's pages,
+  spreads side by side and numbered, and a click goes to that page (`crates/foliolum-shell/src/pages.rs`);
+  parent pages stay in the full editor's Pages panel.
 
 - The tab icon is Foliolum's mark (`favicon.svg`, the marketing site's file, and `favicon.ico`
   rendered from it by `cargo xtask favicon`), served under fixed names and cached for a day.
@@ -57,5 +59,4 @@ On the shared m4: `nice -n 15 env CARGO_BUILD_JOBS=4 trunk build` (about 5 minut
   screen, title bar, Help menu, About) and the ArtCraft mark isn't in the build. The word "ArtCraft" is
   still in the wasm about 128 times, in DesignCraft's translation tables and link constants for screens
   Foliolum no longer shows.
-- Simple editor: the words are English only, DesignCraft's dialogs and panels keep their own wording,
-  and the page strip also lists parent pages.
+- Simple editor: the words are English only, and DesignCraft's dialogs and panels keep their own wording.

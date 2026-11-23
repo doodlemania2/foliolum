@@ -2789,6 +2789,7 @@ dependencies = [
 name = "foliolum-shell"
 version = "0.1.0"
 dependencies = [
+ "designcraft-doc",
  "designcraft-engine",
  "designcraft-tools",
  "designcraft-ui-egui",
