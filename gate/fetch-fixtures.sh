@@ -6,6 +6,9 @@
 #   fixtures/dev22/      the spike's 22 public test files: 21 from Apache POI's test-data/publisher
 #                        (Apache-2.0) and one from LibreOffice's libmspub tests (MPL-2.0), at the pins below.
 #                        No layout exports, so the gate checks them against Pubwork's reader.
+#   fixtures/lobz/       with --lobz only: 33 real-world files people attached to LibreOffice import
+#                        bugs (bugs.documentfoundation.org) so that importers would get them right, by
+#                        attachment id. They can carry real names, so they are never committed.
 #   fixtures/pubwork/    Pubwork's patched libmspub WebAssembly reader (Daffyllas/Pubwork, MPL-2.0): the
 #                        gate's second reference (gate/pubwork/oracle.mjs runs it under Node).
 #
@@ -13,8 +16,11 @@
 # licence, so we fetch them for local testing and never vendor them. Their truth JSON scores imports
 # only; it is never used to work out the file format.
 #
+# Usage: gate/fetch-fixtures.sh [--lobz]
+#
 # Then: cargo xtask gate --set pubsmith --names fixtures/pubsmith
 #       cargo xtask gate --set dev22 --names fixtures/dev22
+#       cargo xtask gate --set lobz --names fixtures/lobz
 #
 # Every file fetched by URL is checked against its SHA-256 below.
 set -euo pipefail
@@ -90,6 +96,51 @@ LIST
 fetch "https://raw.githubusercontent.com/LibreOffice/core/$LO_COMMIT/writerperfect/qa/unit/data/draw/libmspub/pass/fdo59355-1.pub" \
   "$ROOT/fixtures/dev22/lo-fdo59355-1.pub" 79f9a8d99ed18faa174fa7200dbe91627015e2b77439a20421119abc128d62f7
 echo "==> $(find "$ROOT/fixtures/dev22" -name '*.pub' | wc -l | tr -d ' ') .pub files in $ROOT/fixtures/dev22"
+
+# lobz only on request: CI cleans fixtures/ every run, and these come from LibreOffice's Bugzilla,
+# which shouldn't serve 45 MB to every push. CI doesn't gate on them (gate/README.md).
+if [[ "${1:-}" == "--lobz" ]]; then
+echo "==> lobz (LibreOffice Bugzilla attachments)"
+mkdir -p "$ROOT/fixtures/lobz"
+while read -r bug att sha; do
+  fetch "https://bugs.documentfoundation.org/attachment.cgi?id=$att" "$ROOT/fixtures/lobz/lo-bz$bug-$att.pub" "$sha"
+done <<'LIST'
+60556 74547 c6282468f39770d0dfa6f0724c0c4b86d53913bd41350992498fd732ed4d2439
+61579 75659 518c2991eb77403381b9fb1f7236cb0f22fb6bc453da3c2244222eeb4b2f57bd
+64631 79338 1c4ec15176519b7ac98e63fc1f038db9c4575ef69cb59525735ec3aebf312294
+67299 83079 53306e7e76683b5332dda5be30c4b669ae23abcd13345c954356d101f2b30177
+68259 84229 e2419e6e08efc1fa70ee8b9941ea3e80232d4042ccaeec4cd9f72a065ede68df
+68259 84230 8fc593ba08060737eb7eee7d61e45d8d11ff68adf3c4e7de4acb3951abaaabfe
+68259 84231 d24ccb4ea3cf298c76bf9e18c3202c9b7f613288ca2c9a1b28161253d4406d4c
+68259 84232 593640c5168d595a6dd94af1d6e483d590f0582de3fa1eeb1c8baeb7d7553d8f
+68259 84568 e12c721d89482d163af0b837ebe3553c64ad17ad3239a8b7f346c8e6d9951bf8
+69080 99486 c828c93282251f9cf3040753b4ac0ee767cc8b15a88e09c61872da69f6239f2d
+69080 131925 facb8dd2330ff20105cea3bb9ac3b0ff8c1017ffb84ff3f3c4abdb8fb392c100
+78733 99073 9645e2831ab7e5a6676a312c0992547182475100cf32ad20740d24532d29973e
+78739 99784 e74043b2606ce5d479de95710ec7925baa4710ad587ef3647e4fcda0e802614a
+79182 99721 9a0c19bba8d2e52448e2096dca74e6f546bcf5241b4afb63cc61f114809d9d2e
+80661 101957 e090e43a8795922a2bd51652a6404c89df89f68394266e6991fe94a0e40161b4
+84096 106549 b298136dd5571a7a4e6074589df54a5342c44a5e69d20b57270b835f3e9a92b7
+89061 113068 31df4b54e17815c2b8b7aa8da216f36b19dc56c833c0e321a72a8bb279026e69
+89393 113398 3b86147ce740920b663b98249aa47c1fda26f49db870c1d23a8cd2447217db15
+89993 114080 8ce39a18c185f2557e50c04df1fb7355a9aee4a9a7eb481a2c582259e20edae9
+92040 116489 a59b2b22b99a607d11f5391587217fe0397b5d667ce1afbbd16cf6485eccb6f8
+95348 120057 df4b44ddc1b2d3ce255d49c7cfcdeff9c56ac3ca216890017e1011c72985f76f
+95894 120611 a68ed9e7a4a539884e43145e9387fcc0df40b15ad6d9d70ea5ede8b941729fbd
+100639 125942 bc7a640906d22b5c08f13a3c0b175591ed47239095c0ddcb5d412eaa376e0fdb
+102039 127356 59589a33472760953c8bd873eedf6e279015175e108292e488585798bf71ce71
+105567 130715 e29aff93834107d0d74b1f04312934042419335a245d04d8432f84f9caf50410
+116018 140164 e8cfe6bdc421d136e3881b624dcb9e5bd1d170c4ab54de381bfed46da17a0372
+121800 147164 b619a8f92d4e522d1d0969451dd75dec5477a2f7af97d311a4a089a5c2273087
+129090 156177 4ef8a91d781e26967fa2a67de14f3f203af0d2792afc467097239b4b44d6ff1f
+130289 157539 d351e31d1064167992375f5e9e0c5f065a1a3783a41bc3e24f43b7b7f5353411
+133297 161173 8e683113ecb18ce1cac132a083a81835870b84aef81f50971e77f4161c9a9028
+150838 182274 741aa54ac67ef5c1c35547395919b761631428b9973a2e40f07bf54ccfa419ff
+160489 193443 7156f8ebf1ef75ea870803dd5a702fd142b86400afe7dcbdced79aa30e1af2c8
+163388 197010 e07f44af250244ffc4a2e5abf35e9ee74493bdb38a60b6cc060c1bdfe6195919
+LIST
+echo "==> $(find "$ROOT/fixtures/lobz" -name '*.pub' | wc -l | tr -d ' ') .pub files in $ROOT/fixtures/lobz"
+fi
 
 echo "==> Pubwork's reader at ${PUBWORK_COMMIT:0:12}"
 mkdir -p "$ROOT/fixtures/pubwork"

@@ -12,7 +12,7 @@ const MAX_CELLS: usize = 10_000;
 fn bad(message: &str) -> PubError {
     PubError::Malformed(format!("table: {message}"))
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CellInfo {
     pub row: usize,
     pub last_row: usize,
@@ -106,7 +106,12 @@ impl TableInfo {
     }
     pub(crate) fn validate(&self) -> Result<()> {
         let mut occupied = vec![false; self.rows.len() * self.columns.len()];
-        for c in &self.cells {
+        for (i, c) in self.cells.iter().enumerate() {
+            // A record that repeats the one before it is the same cell listed twice (tables.md,
+            // "Cells listed twice"); it covers nothing new.
+            if i > 0 && self.cells.get(i - 1) == Some(c) {
+                continue;
+            }
             if c.row > c.last_row || c.col > c.last_col || c.last_row >= self.rows.len() || c.last_col >= self.columns.len() {
                 return Err(bad("invalid cell rectangle"));
             }
@@ -171,12 +176,16 @@ pub(crate) fn text_ranges(data: &[u8], units: &[u16]) -> Result<Vec<Range<usize>
 fn byte_positions(units: &[u16]) -> Vec<usize> {
     let mut at = Vec::with_capacity(units.len() + 1);
     let mut byte = 0;
+    let mut unit = 0;
     for decoded in char::decode_utf16(units.iter().copied()) {
         let n = decoded.as_ref().map_or(1, |c| c.len_utf16());
         at.extend(std::iter::repeat_n(byte, n));
+        let before_paragraph_end = units.get(unit + n).is_none_or(|u| *u == 13);
+        unit += n;
         byte += match decoded {
             Ok('\r' | '\t') => 1,
-            Ok('\u{b}') => designcraft_doc::FORCED_LINE_BREAK.len_utf8(),
+            Ok('\n') if before_paragraph_end => 0,
+            Ok('\u{b}' | '\n') => designcraft_doc::FORCED_LINE_BREAK.len_utf8(),
             Ok(c) if (c as u32) < 0x20 => 0,
             Ok(c) => c.len_utf8(),
             Err(_) => char::REPLACEMENT_CHARACTER.len_utf8(),
@@ -256,13 +265,10 @@ fn tcd_entries(bytes: &[u8]) -> Result<Vec<TcdEntry<'_>>> {
     Ok(found)
 }
 
-/// The documented unmerged row-major correspondence between cell records and TCD ordinals.
-fn row_major_unmerged(info: &TableInfo) -> bool {
-    let columns = info.columns.len();
-    !info.cells.is_empty()
-        && columns > 0
-        && info.rows.len().checked_mul(columns) == Some(info.cells.len())
-        && info.cells.iter().enumerate().all(|(i, c)| c.row == i / columns && c.col == i % columns && c.last_row == c.row && c.last_col == c.col)
+/// TCD ordinals follow the cell records in their stored order, whatever their coordinates or spans
+/// (docs/pub-format/tables.md, "Cell text order"); the records must tile the grid exactly.
+fn cells_tile_grid(info: &TableInfo) -> bool {
+    !info.cells.is_empty() && info.validate().is_ok()
 }
 
 /// The documented TCD header and exact size for `cells` cells.
@@ -344,8 +350,8 @@ fn single_association(
     data: &[u8],
     work: &mut usize,
 ) -> std::result::Result<Vec<Range<usize>>, &'static str> {
-    if !row_major_unmerged(info) {
-        return Err("the cells are merged or not in row-major order");
+    if !cells_tile_grid(info) {
+        return Err("the cell records do not tile the grid");
     }
     tcd_header(data, info.cells.len())?;
     let end = info.cells.len().checked_sub(1).and_then(|i| i.checked_mul(4)).and_then(|n| n.checked_add(12)).and_then(|at| u32_at(data, at).ok());
@@ -392,8 +398,8 @@ fn slot_association(
     let Ok(slot) = u16::try_from(slot) else { return Err("the story list position does not fit the TCD slot field") };
     let mut chosen = tcds.iter().filter(|t| t.slot == slot);
     let (Some(entry), None) = (chosen.next(), chosen.next()) else { return Err("the story does not have exactly one TCD entry") };
-    if !row_major_unmerged(info) {
-        return Err("the cells are merged or not in row-major order");
+    if !cells_tile_grid(info) {
+        return Err("the cell records do not tile the grid");
     }
     tcd_header(entry.data, info.cells.len())?;
     let story = q.stories.get(&id).ok_or("the linked story is missing")?;
@@ -494,8 +500,7 @@ impl Builder<'_> {
         let source = self.doc.story(sid).cloned().ok_or_else(|| bad("missing host story"))?;
         let qs = self.q.stories.get(&tid).ok_or_else(|| bad("missing text story"))?;
         let ranges = qs.cell_ranges.as_ref().filter(|r| r.len() == info.cells.len());
-        let merged = info.cells.iter().any(|c| c.row != c.last_row || c.col != c.last_col);
-        let can_assign = ranges.is_some_and(|r| !merged || r.iter().all(Range::is_empty));
+        let can_assign = ranges.is_some();
         let mut table = Table::new(self.doc.alloc(), info.rows.len(), info.columns.len(), 0, 0, rect.width());
         table.options.border = CellStroke::none();
         for (row, height) in table.rows.iter_mut().zip(&info.rows) {
@@ -509,15 +514,36 @@ impl Builder<'_> {
             cell.border_overrides = [true; 4];
         }
         let bytes = byte_positions(&qs.units);
+        // Fold each record that repeats the one before it into that cell: its text follows the
+        // first record's, after the separator between them, which becomes a paragraph break.
+        let mut regions: Vec<(&CellInfo, Option<Range<usize>>)> = Vec::with_capacity(info.cells.len());
+        let mut repeated = 0usize;
         for (i, region) in info.cells.iter().enumerate() {
+            let range = ranges.and_then(|r| r.get(i)).cloned();
+            match regions.last_mut() {
+                Some((last, last_range)) if *last == region => {
+                    repeated += 1;
+                    if let (Some(a), Some(b)) = (last_range.as_mut(), range) {
+                        a.end = b.end;
+                    }
+                }
+                _ => regions.push((region, range)),
+            }
+        }
+        for (region, range) in regions {
             let cell = table.cell_mut(region.row, region.col).ok_or_else(|| bad("missing native cell"))?;
             cell.row_span = (region.last_row - region.row + 1) as u32;
             cell.col_span = (region.last_col - region.col + 1) as u32;
-            if can_assign && let Some(range) = ranges.and_then(|r| r.get(i)) {
+            if can_assign && let Some(range) = range {
                 let a = *bytes.get(range.start).ok_or_else(|| bad("missing text start"))?;
                 let z = *bytes.get(range.end).ok_or_else(|| bad("missing text end"))?;
                 cell.text = cell_story(&source, a..z, &mut self.table_work)?;
             }
+        }
+        if repeated > 0 {
+            self.warnings.push(format!(
+                "Publisher table lists {repeated} cell(s) twice, as for a cell split in two; both parts' text is in the one cell, one after the other, and the split is not drawn."
+            ));
         }
         let mut host = if can_assign {
             let mut host = Story::new(sid);
@@ -805,6 +831,68 @@ mod tests {
         vertical.validate().unwrap();
     }
     #[test]
+    fn cell_text_follows_record_order_for_merged_and_reordered_cells() {
+        // As in the real-world certificates: a column inserted later is listed after the others,
+        // and a merged cell is listed last; each TCD ordinal is the record at that position.
+        let mut info = grid();
+        info.cells = vec![
+            CellInfo { row: 1, last_row: 1, col: 1, last_col: 1 },
+            CellInfo { row: 1, last_row: 1, col: 0, last_col: 0 },
+            CellInfo { row: 0, last_row: 0, col: 0, last_col: 1 },
+        ];
+        info.validate().unwrap();
+        let ranges = text_ranges(&table_data(&[5, 11, 17]), &"Value\rLabel\rHead\r".encode_utf16().collect::<Vec<_>>()).unwrap();
+        let imp = import(info, "Value\rLabel\rHead\r", Some(ranges));
+        let host = imp.document.stories.values().next().unwrap();
+        let t = host.tables.values().next().unwrap();
+        assert_eq!(t.cell(0, 0).unwrap().text.text, "Head");
+        assert_eq!(t.cell(0, 0).unwrap().col_span, 2);
+        assert_eq!(t.cell(1, 0).unwrap().text.text, "Label");
+        assert_eq!(t.cell(1, 1).unwrap().text.text, "Value");
+        assert!(!host.text.contains("Head"), "the text is in the cells, not kept after the table");
+        assert!(!imp.warnings.iter().any(|w| w.contains("original text was retained")), "{:?}", imp.warnings);
+    }
+    #[test]
+    fn a_cell_listed_twice_holds_both_texts_and_warns() {
+        // As in a real-world file (LibreOffice bug 60556): the same rectangle twice in a row.
+        let mut info = grid();
+        let bottom = CellInfo { row: 1, last_row: 1, col: 0, last_col: 1 };
+        info.cells = vec![info.cells[0].clone(), info.cells[1].clone(), bottom.clone(), bottom];
+        info.validate().unwrap();
+        let text = "A\rB\rLeft\rRight\r";
+        let ranges = text_ranges(&table_data(&[1, 3, 8, 15]), &text.encode_utf16().collect::<Vec<_>>()).unwrap();
+        let imp = import(info, text, Some(ranges));
+        let t = imp.document.stories.values().next().unwrap().tables.values().next().unwrap();
+        let both = &t.cell(1, 0).unwrap().text;
+        assert_eq!(both.text.replace(['\r', '\n'], "|"), "Left|Right");
+        assert_eq!(both.paras.len(), 2);
+        assert_eq!(t.cell(1, 0).unwrap().col_span, 2);
+        assert!(imp.warnings.iter().any(|w| w.contains("lists 1 cell(s) twice")), "{:?}", imp.warnings);
+        // Listed twice but not one after the other is still an overlap.
+        let mut apart = grid();
+        let c = apart.cells.clone();
+        apart.cells = vec![c[0].clone(), c[1].clone(), c[0].clone(), c[2].clone(), c[3].clone()];
+        assert!(apart.validate().is_err());
+    }
+    #[test]
+    fn a_line_feed_breaks_the_line_in_and_out_of_cells() {
+        // Real-world files (LibreOffice bugs 89393, 80661, 105567) use 0x0A between lines.
+        let text = "Information\nWebsite\rB\r";
+        let ranges = text_ranges(&table_data(&[19, 22]), &text.encode_utf16().collect::<Vec<_>>()).unwrap();
+        let mut info = grid();
+        info.cells.truncate(2);
+        info.rows.truncate(1);
+        let imp = import(info, text, Some(ranges));
+        let t = imp.document.stories.values().next().unwrap().tables.values().next().unwrap();
+        let brk = designcraft_doc::FORCED_LINE_BREAK;
+        assert_eq!(t.cell(0, 0).unwrap().text.text, format!("Information{brk}Website"));
+        assert_eq!(t.cell(0, 1).unwrap().text.text, "B");
+        let kept = import(grid(), "Information\nWebsite\n\r", None);
+        let host = &kept.document.stories.values().next().unwrap().text;
+        assert!(host.contains(&format!("Information{brk}Website")), "{host:?}");
+        assert!(!host.contains(&format!("Website{brk}")), "no break before the paragraph mark: {host:?}");
+    }
+    #[test]
     fn ambiguous_cell_text_stays_after_the_native_table() {
         let imp = import(grid(), "Never lose this\r", None);
         let host = imp.document.stories.values().next().unwrap();
@@ -823,6 +911,8 @@ mod tests {
         assert!(text_ranges(&u32::MAX.to_le_bytes(), &units).is_err());
         assert!(text_ranges(&[0; 12], &units).is_err());
         assert_eq!(byte_positions(&[0xd83d, 0xde00, 13, 0xb, 9, 1]), vec![0, 0, 4, 5, 8, 9, 9]);
+        assert_eq!(byte_positions(&[0x41, 0xa, 0x42]), vec![0, 1, 4, 5]);
+        assert_eq!(byte_positions(&[0x41, 0xa, 13]), vec![0, 1, 1, 2], "a line feed before a paragraph mark is dropped");
     }
     #[test]
     fn rejects_overlapping_missing_and_out_of_bounds_cells() {
@@ -898,7 +988,11 @@ mod multi_story_text_tests {
                     bytes[56..80].copy_from_slice(&entry);
                 }
                 3 => bytes[104..108].copy_from_slice(&0u32.to_le_bytes()),
-                4 => c.shapes.get_mut(&42).unwrap().table.as_mut().unwrap().cells.swap(0, 1),
+                // Records that overlap instead of tiling the grid (a reordering alone is fine).
+                4 => {
+                    let cells = &mut c.shapes.get_mut(&42).unwrap().table.as_mut().unwrap().cells;
+                    cells[0] = cells[1].clone();
+                }
                 _ => bytes[112..116].copy_from_slice(&5u32.to_le_bytes()),
             }
             let original: Vec<_> = q.stories.iter().map(|(id, s)| (*id, s.units.clone())).collect();

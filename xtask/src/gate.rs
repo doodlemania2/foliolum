@@ -56,6 +56,9 @@ pub struct FileResult {
     pub bytes: usize,
     pub pages: Option<usize>,
     pub warnings: usize,
+    /// What the importer said it could not bring over (results.jsonl only, for diagnosis).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub warning_text: Vec<String>,
     pub opens: Check,
     pub complete: Check,
     pub exports: Check,
@@ -145,6 +148,7 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
         bytes: bytes.len(),
         pages: None,
         warnings: 0,
+        warning_text: Vec::new(),
         opens: Check::Unchecked("not run".into()),
         complete: Check::Unchecked("did not open".into()),
         exports: Check::Unchecked("did not open".into()),
@@ -179,6 +183,7 @@ pub fn run_file(path: &Path, opts: &Options) -> FileResult {
     let doc = imported.document;
     r.pages = Some(doc.page_count());
     r.warnings = imported.warnings.len();
+    r.warning_text = imported.warnings.clone();
     r.fonts = font_uses(&doc);
     let sizes: Vec<(f64, f64)> = (0..doc.page_count()).filter_map(|i| doc.page(i).map(|p| (p.width, p.height))).collect();
 
@@ -271,6 +276,16 @@ fn overset_count(warning: &str) -> Option<usize> {
 }
 
 /// Reads the exported PDF back, compares its pages with the document, and writes one PNG per page.
+/// A page render on white paper. The renderer leaves the paper transparent, and some viewers show
+/// that as black, which would put a reviewer off a page that prints on white.
+fn on_paper(png: &[u8]) -> Option<Vec<u8>> {
+    let page = tiny_skia::Pixmap::decode_png(png).ok()?;
+    let mut out = tiny_skia::Pixmap::new(page.width(), page.height())?;
+    out.fill(tiny_skia::Color::WHITE);
+    out.draw_pixmap(0, 0, page.as_ref(), &tiny_skia::PixmapPaint::default(), tiny_skia::Transform::identity(), None);
+    out.encode_png().ok()
+}
+
 fn check_pdf(pdf_path: &Path, sizes: &[(f64, f64)], png_dir: &Path) -> Check {
     let Ok(pdf) = std::fs::read(pdf_path) else { return Check::Fail("no PDF written".into()) };
     let Some(pdf_sizes) = designcraft_render::pdf_page_sizes(&pdf) else { return Check::Fail("PDF does not parse".into()) };
@@ -287,7 +302,7 @@ fn check_pdf(pdf_path: &Path, sizes: &[(f64, f64)], png_dir: &Path) -> Check {
         let png = catch_unwind(AssertUnwindSafe(|| designcraft_render::pdf_page_png(&pdf, i, REVIEW_PX, &[], None)));
         match png {
             Ok(Some(png)) => {
-                if let Err(e) = std::fs::write(png_dir.join(format!("page-{:02}.png", i + 1)), png) {
+                if let Err(e) = std::fs::write(png_dir.join(format!("page-{:02}.png", i + 1)), on_paper(&png).unwrap_or(png)) {
                     return Check::Fail(format!("writing page {} render: {e}", i + 1));
                 }
             }
@@ -378,6 +393,8 @@ mod tests {
         assert!(!r.pass);
         assert!(!r.machine_checks_pass(), "no reference: completeness is unchecked, so not a pass");
         assert!(d.join("hello/page-01.png").exists());
+        let render = tiny_skia::Pixmap::decode_png(&std::fs::read(d.join("hello/page-01.png")).unwrap()).unwrap();
+        assert_eq!(render.pixel(0, 0).unwrap().demultiply(), tiny_skia::ColorU8::from_rgba(255, 255, 255, 255), "paper is white");
         // A reviewer's yes alone does not make it pass while completeness is unchecked.
         let r = run_file(Path::new(HELLO), &opts(&d, json!({ r.sha256.clone(): { "verdict": "recognizable" } })));
         assert_eq!(r.recognizable, Check::Pass);

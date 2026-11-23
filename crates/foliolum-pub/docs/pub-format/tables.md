@@ -65,11 +65,30 @@ monotonic boundaries and exact final length. Do not split on every CR: cells
 may contain paragraph breaks, and only TCD boundaries are cell separators.
 
 For the unmerged 2×2 sample, cell text order and cell-record order are row-major,
-confirmed by `A1`, `B1`, `A2`, `B2`. All merged cells in the available fixture are
-empty: text association for nonempty merged cells is **not confirmed**. Preserve
-such unassigned text after the table with a warning, rather than guessing which
-merged cell owns it. Association across multiple stories/TCD sections is also
-unconfirmed; retain text and warn when that association is ambiguous.
+confirmed by `A1`, `B1`, `A2`, `B2`. All merged cells in that fixture are empty.
+
+### Cell text order (real-world files)
+
+Two real-world pedigree certificates (`fixtures/lobz/lo-bz84096-106549.pub` and
+`lo-bz89061-113068.pub`, attached to LibreOffice bugs 84096 and 89061) settle the
+general case. Each has a 5×6 table whose cell records are **not** row-major: the
+records for columns 2 and 1 come after all the others (records 16–23), as if those
+columns were inserted later. Each also has a 15×4 pedigree table with cells merged
+across columns 0–1, and one merged record (row 12) listed last.
+
+Read in record order, every TCD ordinal lands in a cell that makes sense on its
+own: the label column reads `Sex`, `D.O.B`, `Reg. No.`, `Colour`, `Microchip No.`;
+the date sits beside `D.O.B`; `Breeder:` sits before the breeder's name and address
+lines; and sires and dams fall into their generation columns. Read row-major, labels
+and values interleave meaninglessly. So:
+
+- **TCD ordinal *i* is the text of cell record *i*, in stored order**, whatever the
+  record's coordinates or spans. The records must still tile the grid exactly
+  (no gaps, no overlaps); otherwise the text is kept after the table with a warning.
+
+Association across several stories/TCD sections uses the SYID slot rule below
+(confirmed by the same files: each table's story sits at the SYID position named by
+its TCD entry's slot field). Retain text and warn when that association is ambiguous.
 
 ## Cell fills and borders: unconfirmed
 
@@ -131,7 +150,7 @@ encodings.
 When a publication has several stories, one table and one `TCD ` section, the
 table's text is recovered only if the `Contents` link (key 0x27) names the
 story, the `TCD ` boundaries match that story and no other, and the cell records
-are row-major. Otherwise the text is kept after the table with a warning; no
+tile the grid. Otherwise the text is kept after the table with a warning; no
 story is chosen by order and the directory occurrence field is not interpreted.
 
 ## Inconsistent stored dimensions — import approximation (issue #44)
@@ -276,7 +295,8 @@ matching that slot -> TCD cell ordinal -> linked cell-list child ordinal
 and its stored grid coordinates. This is a sample-supported rule, with
 independent boundary/content checks below. It is not evidence that every
 Quill tag's E+6 field has this meaning or that merged/non-row-major tables
-can be assigned by ordinal without further evidence.
+can be assigned by ordinal without further evidence. (That evidence came later:
+see "Cell text order (real-world files)" above.)
 
 ### Ranges, labels and false-positive controls
 
@@ -380,9 +400,10 @@ below succeed; otherwise preserve the source text with a bounded warning.
   story, no conflicting reuse, exact `12+4*N` size, the observed header, and
   N matching actual cells. Require the terminal boundary to equal story length
   and every intermediate separator to be CR, including empty cells.
-- INFERENCE: require the unmerged row-major cell correspondence verified here;
-  validate stored rectangles, occupancy and all local/global range arithmetic.
-  Do not silently reuse ordinal mapping for merged or non-row-major cases.
+- INFERENCE: validate stored rectangles, occupancy and all local/global range
+  arithmetic. (Superseded: this first required row-major, unmerged records; the
+  real-world certificates later showed TCD ordinals follow record order for merged
+  and reordered records too. See "Cell text order (real-world files)".)
 - INFERENCE: convert UTF-16 ranges to the normalized story representation with
   checked character boundaries, preserving empty cells and excluding separators.
   Invalid surrogate handling or normalization must not shift later ranges.

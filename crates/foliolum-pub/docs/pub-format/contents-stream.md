@@ -93,10 +93,12 @@ Seen but not read: 0x01, 0x03, 0x05 (a nested list of two EMU sizes), 0x06 (8-by
 
 1. Each page-list entry whose record is a type-0x43 page record with a non-empty master label is a **master page**. Masters keep page-list order.
 2. Of the remaining entries (non-masters, plus entries that don't point to a page record at all), Publisher always appends **four placeholders** at the end. One of them is the **scratch area** (the pasteboard beside the pages); Publisher's own export doesn't show objects placed there.
-3. Treat the last four non-master entries as placeholders only when **both** hold: there are more than four non-master entries, and at most one of those last four is a page record that lists objects. Otherwise (a file from another writer) there are no placeholders.
+3. Treat the last four non-master entries as placeholders only when **both** hold: there are more than four non-master entries, and at least one of those last four is not a page record that lists objects. Otherwise (a file from another writer, such as the importer's own test and stress writers, whose pages all hold objects) there are no placeholders.
 4. Ordinary pages = every non-master, non-placeholder entry that points to a page record, in page-list order. Entries that don't point to a type-0x43 record are skipped.
 5. If a placeholder lists objects, warn that scratch-area objects were not imported.
 6. If no ordinary page is left, use the first placeholder page that lists no objects, so that a publication with one blank page still has a page.
+
+*Rule 3 first allowed at most one placeholder with objects. A real-world parish bulletin (LibreOffice bug 116018, `fixtures/lobz/lo-bz116018-140164.pub`) has two: the scratch area (120 objects) and a placeholder holding one text box, so the old rule kept both as pages 5 and 7. The PDF its author exported from Publisher (attachment 140163 on that bug) has 4 pages, the four before the placeholders. Across all 193 Publisher 2002+ files in the pubsmith, dev22 and lobz sets, every page list ends in its four placeholders and at least one of them lists nothing; no other file changes under the new rule.*
 
 *Source: rules 2–6 come from the existing code and its comments ("observed in every sample"). Confirmed in `text__bold.pub`: page list = 0x107 (master A), 0x10A (the page), 0x10D, 0x110, 0x113, 0x117 (four placeholders). the first synthetic sample has a one-entry page list (no placeholders), which is why rule 3 exists.*
 
