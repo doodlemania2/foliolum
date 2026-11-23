@@ -181,7 +181,7 @@ fn byte_positions(units: &[u16]) -> Vec<usize> {
         at.extend(std::iter::repeat_n(byte, n));
         byte += match decoded {
             Ok('\r' | '\t') => 1,
-            Ok('\u{b}') => designcraft_doc::FORCED_LINE_BREAK.len_utf8(),
+            Ok('\u{b}' | '\n') => designcraft_doc::FORCED_LINE_BREAK.len_utf8(),
             Ok(c) if (c as u32) < 0x20 => 0,
             Ok(c) => c.len_utf8(),
             Err(_) => char::REPLACEMENT_CHARACTER.len_utf8(),
@@ -871,6 +871,22 @@ mod tests {
         assert!(apart.validate().is_err());
     }
     #[test]
+    fn a_line_feed_breaks_the_line_in_and_out_of_cells() {
+        // Real-world files (LibreOffice bugs 89393, 80661, 105567) use 0x0A between lines.
+        let text = "Information\nWebsite\rB\r";
+        let ranges = text_ranges(&table_data(&[19, 22]), &text.encode_utf16().collect::<Vec<_>>()).unwrap();
+        let mut info = grid();
+        info.cells.truncate(2);
+        info.rows.truncate(1);
+        let imp = import(info, text, Some(ranges));
+        let t = imp.document.stories.values().next().unwrap().tables.values().next().unwrap();
+        let brk = designcraft_doc::FORCED_LINE_BREAK;
+        assert_eq!(t.cell(0, 0).unwrap().text.text, format!("Information{brk}Website"));
+        assert_eq!(t.cell(0, 1).unwrap().text.text, "B");
+        let kept = import(grid(), "Information\nWebsite\r", None);
+        assert!(kept.document.stories.values().next().unwrap().text.contains(&format!("Information{brk}Website")));
+    }
+    #[test]
     fn ambiguous_cell_text_stays_after_the_native_table() {
         let imp = import(grid(), "Never lose this\r", None);
         let host = imp.document.stories.values().next().unwrap();
@@ -889,6 +905,7 @@ mod tests {
         assert!(text_ranges(&u32::MAX.to_le_bytes(), &units).is_err());
         assert!(text_ranges(&[0; 12], &units).is_err());
         assert_eq!(byte_positions(&[0xd83d, 0xde00, 13, 0xb, 9, 1]), vec![0, 0, 4, 5, 8, 9, 9]);
+        assert_eq!(byte_positions(&[0x41, 0xa, 0x42]), vec![0, 1, 4, 5]);
     }
     #[test]
     fn rejects_overlapping_missing_and_out_of_bounds_cells() {

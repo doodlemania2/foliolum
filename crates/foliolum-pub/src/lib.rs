@@ -1051,7 +1051,8 @@ impl<'a> Builder<'a> {
             unit += len16;
             match res {
                 Ok('\r') => text.push('\n'),
-                Ok('\u{000b}') => text.push(designcraft_doc::FORCED_LINE_BREAK),
+                // 0x0B, and 0x0A in real-world files (docs/pub-format/text-store.md), break the line.
+                Ok('\u{000b}' | '\n') => text.push(designcraft_doc::FORCED_LINE_BREAK),
                 Ok('\t') => text.push('\t'),
                 Ok(c) if (c as u32) < 0x20 => skipped = true,
                 Ok(c) => match symbol {

@@ -55,6 +55,13 @@ The whole section is UTF-16LE text: every story, one after another, in the order
 
 *Source: layout from the existing code; confirmed in the first synthetic sample (one 31-character paragraph + CR, 32 units) and `text2__two-boxes.pub` (two stories back to back). Control-unit meanings from the crate's import code; 0x000B confirmed by `text__line-break.pub`.*
 
+**0x000A is a line break too.** Real-world files attached to LibreOffice bugs 89393 (a church
+bulletin), 80661 (a sponsorship brochure) and 105567 (an Italian order of service) put 0x000A where
+a line visibly breaks: between the sentences of a bulletin note (`stand.` 0x000A `**If you wish…`),
+between the lines of a contact block (`Information` 0x000A `Website:`), and twice between the
+responses of a liturgy (`Alleluia.` 0x000A 0x000A `1 coro:`). None of these is a field position.
+The importer treats it exactly like 0x000B: a line break inside the paragraph.
+
 ## 4. `SYID` and `STRS`: which story is which
 
 **`SYID` — story ids.**

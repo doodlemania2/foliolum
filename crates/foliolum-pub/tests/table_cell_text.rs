@@ -277,9 +277,13 @@ fn a_separator_that_is_not_a_paragraph_mark_is_not_placed() {
 }
 
 #[test]
-fn a_merged_cell_table_is_not_placed_by_ordinal() {
+fn a_merged_cell_table_is_placed_by_record_order() {
+    // tables.md, "Cell text order (real-world files)": TCD ordinal i is cell record i, merged or not.
     let seen = import(&Case { merge_first_two_cells_of_a: true, ..Case::good() });
-    assert_fallback_for_a(&seen, "merged or not in row-major order");
+    // Records: the merged top-left pair, then (0,2), (1,0), (1,1), (1,2); the covered slot stays empty.
+    assert_eq!(seen.a, ["", "", "Tue", "1", "22", ""]);
+    assert!(!seen.host_text.contains("Tue"), "the text is in the cells: {:?}", seen.host_text);
+    assert!(!warned(&seen, KEPT), "{:?}", seen.warnings);
     assert_eq!(seen.b[3], "D\u{e9}");
 }
 
