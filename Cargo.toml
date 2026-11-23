@@ -42,6 +42,9 @@ rfd = "0.17"
 log = "0.4"
 miniz_oxide = "0.8"
 pico-args = "0.5"
+# xtask favicon renders apps/foliolum-web/favicon.svg; the versions DesignCraft already locks.
+resvg = { version = "0.48", default-features = false }
+tiny-skia = { version = "0.12", default-features = false, features = ["std", "png-format"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 sha2 = "0.10"

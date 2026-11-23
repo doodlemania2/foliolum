@@ -8035,9 +8035,11 @@ dependencies = [
  "foliolum-pub",
  "miniz_oxide 0.8.9",
  "pico-args",
+ "resvg 0.48.1",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "tiny-skia",
 ]
 
 [[package]]

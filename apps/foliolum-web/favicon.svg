@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="t">
+  <title id="t">Foliolum</title>
+  <rect width="64" height="64" rx="12" fill="#FBF8F2"/>
+  <path d="M14 50 C14 29 29 14 50 14 Z" fill="#B3322A"/>
+  <path d="M14 50 L50 14 C50 35 35 50 14 50 Z" fill="#FBF8F2" stroke="#1F2430" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M14 50 L8 56" stroke="#1F2430" stroke-width="4" stroke-linecap="round"/>
+</svg>

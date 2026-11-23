@@ -14,7 +14,8 @@ pub enum Action {
     Tool(&'static str),
 }
 
-/// One button: its label, what it does, and one of DesignCraft's icon names if one fits.
+/// One button: its label, what it does, and its icon: one of ours (`fo-…`, [`crate::icons`]) or one of
+/// DesignCraft's.
 #[derive(Clone, Copy, Debug)]
 pub struct Button {
     pub label: &'static str,
@@ -56,18 +57,18 @@ pub const TABS: &[Tab] = &[
             Group {
                 caption: "Document",
                 buttons: &[
-                    menu("New…", "app.newDocumentDialog", None),
-                    menu("Open…", "app.openDialog", None),
-                    menu("Save", "app.save", None),
-                    menu("Save a copy…", "app.saveCopyDialog", None),
+                    menu("New…", "app.newDocumentDialog", Some("fo-new")),
+                    menu("Open…", "app.openDialog", Some("fo-open")),
+                    menu("Save", "app.save", Some("preset-save")),
+                    menu("Save a copy…", "app.saveCopyDialog", Some("fo-save-copy")),
                 ],
             },
             Group {
                 caption: "Print and share",
                 buttons: &[
-                    menu("PDF for printing…", "app.exportPdf", None),
-                    menu("Picture…", "app.exportPng", None),
-                    menu("Booklet…", "app.printBooklet", None),
+                    menu("PDF for printing…", "app.exportPdf", Some("fo-print")),
+                    menu("Picture…", "app.exportPng", Some("fo-picture")),
+                    menu("Booklet…", "app.printBooklet", Some("fo-booklet")),
                 ],
             },
             Group {
@@ -79,10 +80,14 @@ pub const TABS: &[Tab] = &[
     Tab {
         name: "Home",
         groups: &[
-            Group { caption: "Undo", buttons: &[menu("Undo", "edit.undo", None), menu("Redo", "edit.redo", None)] },
+            Group { caption: "Undo", buttons: &[menu("Undo", "edit.undo", Some("fo-undo")), menu("Redo", "edit.redo", Some("fo-redo"))] },
             Group {
                 caption: "Clipboard",
-                buttons: &[menu("Cut", "edit.cut", None), menu("Copy", "edit.copy", None), menu("Paste", "edit.paste", None)],
+                buttons: &[
+                    menu("Cut", "edit.cut", Some("tool-scissors")),
+                    menu("Copy", "edit.copy", Some("fo-copy")),
+                    menu("Paste", "edit.paste", Some("fo-paste")),
+                ],
             },
             Group {
                 caption: "Pointer",
@@ -94,7 +99,7 @@ pub const TABS: &[Tab] = &[
             },
             Group {
                 caption: "Words",
-                buttons: &[menu("Find and replace…", "app.findChange", Some("search")), menu("Spelling…", "spelling.check", None)],
+                buttons: &[menu("Find and replace…", "app.findChange", Some("search")), menu("Spelling…", "spelling.check", Some("fo-spelling"))],
             },
         ],
     },
