@@ -68,6 +68,11 @@ is excused, with a note, up to the number of extra text boxes we have, because W
 read may reach it as a bare shape. Empty pages the reader leaves out are noted. If the reader can't read
 a file, or finds no pages where we found content, completeness is unchecked: never a pass.
 
+**Symbols and control characters.** Text compares with control characters left out (no one draws
+them; the reader keeps Publisher's 0x1F optional hyphen), and a Latin-1 letter on one side matches a
+symbol outside Latin-1 on the other, because we draw symbol-font text (Wingdings, Webdings, Symbol)
+as the Unicode symbols it shows where the reader keeps the letters.
+
 **Cells split in two.** Publisher can list one table cell twice, once for each half of a split cell.
 We keep both halves' text in the one cell, one after the other, and warn that the split isn't drawn;
 the reader lists the halves as separate texts, and sometimes stops reading the table there. A reader

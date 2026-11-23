@@ -170,6 +170,26 @@ OBSERVATION about PICT code: referenced record type 0xF01C returns no asset and 
 
 UNKNOWN: whether any real WMF picture is missing an unhandled record's visible effect. The thirteen SVG outputs parse, but neither absence of warnings nor those parses compare their content with Publisher.
 
+## Real-world EMFs (LibreOffice Bugzilla set, 2026-11-23)
+
+The real-world set (`fixtures/lobz/`, see `gate/README.md`) settled two EMF cases from the files
+themselves, read against Microsoft's public MS-EMF specification:
+
+- **An EMF that is one bitmap.** All 23 pictures of LibreOffice bug 130289's page hold an EMF whose
+  records are the header, one EMR_STRETCHDIBITS (type 81) and EOF. The DIB is 32-bit, uncompressed
+  (BI_RGB), and its source rectangle starts at (0, 0) and covers the whole bitmap, overhanging it by
+  1 to 3 pixels (848 wide for an 845-pixel bitmap; GDI clips the overhang). Drawn as vectors these
+  were empty frames. The importer now takes such an EMF's bitmap as an ordinary picture: header,
+  EOF, state-only records and comments may come with the one EMR_STRETCHDIBITS; anything else that
+  draws, a source that crops the bitmap or overhangs it by more than 4 pixels plus 2%, or a DIB
+  compression other than none/RLE/bitfields (BMP) or JPEG/PNG (taken as they are) is left to the
+  metafile reader. Compared with the LibreOffice 4 screenshot attached to the bug, every scan,
+  photo and map is in place and upright.
+- **An EMF that is only a header.** Bugs 78739 and 79182 each have two EMFs of 128 bytes: the
+  108-byte header with the empty bounds rectangle (0, 0, -1, -1) and an EOF record, nothing else.
+  They draw nothing, so they are now empty pictures sized by the header's frame (in 0.01 mm),
+  rather than "could not be read".
+
 ## Files that would settle remaining questions
 
 INFERENCE: request 28 small Publisher-authored files, each with its corresponding Publisher PDF or PNG for scoring only, all using original or clearly redistributable artwork. Keep page, frame, artwork, version and other settings fixed except for the stated change:

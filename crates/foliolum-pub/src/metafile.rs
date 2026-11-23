@@ -58,6 +58,74 @@ pub(crate) fn to_svg_report(kind: u16, blip: &[u8]) -> std::result::Result<Optio
     Ok(to_svg(kind, blip))
 }
 
+/// A picture an EMF holds as one bitmap and nothing else.
+pub(crate) enum Bitmap {
+    /// A device-independent bitmap: its BITMAPINFO followed by its bits.
+    Dib(Vec<u8>),
+    /// JPEG or PNG data that the DIB header says its bits are (compression 4 or 5).
+    Encoded(Vec<u8>),
+}
+
+/// The bitmap of an EMF whose only drawing is one EMR_STRETCHDIBITS (MS-EMF 2.3.1.7) showing the
+/// whole bitmap. Real-world files hold photos and clip art this way (LibreOffice bug 130289's
+/// greeting card has 23); drawn as vectors they would be empty. Records that only set state may
+/// come with it; anything else that draws means `None`, and the picture is read as a metafile.
+pub(crate) fn single_bitmap(kind: u16, blip: &[u8]) -> Option<Bitmap> {
+    if kind != BLIP_EMF {
+        return None;
+    }
+    let raw = metafile_bytes(blip)?;
+    if u32_at(&raw, 0)? != 1 || u32_at(&raw, 40)? != 0x464D_4520 {
+        return None;
+    }
+    // Header, EOF, and records that only set state or comment.
+    const PASSIVE: [u32; 14] = [1, 14, 9, 10, 11, 12, 17, 18, 19, 20, 21, 22, 33, 34];
+    const GDI_COMMENT: u32 = 70;
+    const STRETCHDIBITS: u32 = 81;
+    let mut found = None;
+    let mut at = 0usize;
+    while let (Some(ty), Some(size)) = (u32_at(&raw, at), u32_at(&raw, at + 4)) {
+        let len = usize::try_from(size).ok()?;
+        let rec = raw.get(at..at.checked_add(len)?)?;
+        if len < 8 {
+            return None;
+        }
+        match ty {
+            STRETCHDIBITS if found.is_none() => found = Some(rec),
+            t if PASSIVE.contains(&t) || t == GDI_COMMENT => {}
+            _ => return None,
+        }
+        if ty == 14 {
+            break;
+        }
+        at = at.checked_add(len)?;
+    }
+    let rec = found?;
+    let field = |at: usize| u32_at(rec, at).and_then(|v| usize::try_from(v).ok());
+    let (x_src, y_src, cx_src, cy_src) = (i32_at(rec, 32)?, i32_at(rec, 36)?, i32_at(rec, 40)?, i32_at(rec, 44)?);
+    let (off_bmi, cb_bmi, off_bits, cb_bits) = (field(48)?, field(52)?, field(56)?, field(60)?);
+    let bmi = rec.get(off_bmi..off_bmi.checked_add(cb_bmi)?)?;
+    let bits = rec.get(off_bits..off_bits.checked_add(cb_bits)?)?;
+    // BITMAPINFOHEADER: size, width, height, planes, bit count, compression.
+    if cb_bmi < 40 || u32_at(bmi, 0)? < 40 {
+        return None;
+    }
+    let (width, height) = (i32_at(bmi, 4)?, i32_at(bmi, 8)?);
+    // Only the whole bitmap: a part of it would need cropping that the frame doesn't say. The
+    // source may overhang the bitmap by a few pixels (130289's are 1-3 wider: 848 for 845); GDI
+    // clips the overhang, and a sliver that small is not worth a crop.
+    let covers = |src: i32, size: i32| src >= size && src - size <= 4 + size / 50;
+    let rows = height.checked_abs()?;
+    if x_src != 0 || y_src != 0 || width <= 0 || rows == 0 || !covers(cx_src, width) || !covers(cy_src, rows) {
+        return None;
+    }
+    match u32_at(bmi, 16)? {
+        4 | 5 => Some(Bitmap::Encoded(bits.to_vec())),
+        0..=3 => Some(Bitmap::Dib([bmi, bits].concat())),
+        _ => None,
+    }
+}
+
 fn metafile_bytes(blip: &[u8]) -> Option<Vec<u8>> {
     metafile_bytes_with_limit(blip, MAX_METAFILE)
 }
@@ -177,6 +245,8 @@ struct Canvas {
     hair: f64,
     warnings: Vec<&'static str>,
     full: bool,
+    /// EMF: nothing after the header (records 1 and 14 only), so nothing to draw is the right result.
+    blank: bool,
     limit: usize,
 }
 
@@ -195,6 +265,7 @@ impl Canvas {
             hair: 1.0,
             warnings: Vec::new(),
             full: false,
+            blank: false,
             limit: MAX_SVG,
         }
     }
@@ -423,7 +494,7 @@ impl Canvas {
     }
 
     fn finish(self, vw: f64, vh: f64) -> Option<Svg> {
-        if (self.body.is_empty() && !self.full) || !(vw.is_finite() && vh.is_finite()) || vw <= 0.0 || vh <= 0.0 {
+        if (self.body.is_empty() && !self.full && !self.blank) || !(vw.is_finite() && vh.is_finite()) || vw <= 0.0 || vh <= 0.0 {
             return None;
         }
         // Integer size with enough resolution for the aspect ratio.
@@ -682,11 +753,15 @@ fn emf(raw: &[u8], size_emu: (i32, i32)) -> Option<Svg> {
     let mut table: HashMap<u32, Obj> = HashMap::new();
     let mut at = 0usize;
     let mut n = 0usize;
+    // Real-world files hold EMFs that are only a header (LibreOffice bugs 78739 and 79182): an
+    // empty picture, not a damaged one.
+    let mut only_header = true;
     while let (Some(ty), Some(size)) = (u32_at(raw, at), u32_at(raw, at + 4)) {
         let len = usize::try_from(size).ok()?;
         if len < 8 || ty == 14 {
             break;
         }
+        only_header &= ty == 1;
         let Some(rec) = raw.get(at..at.checked_add(len)?) else { break };
         emf_record(&mut c, &mut table, ty, rec, len);
         // MOVETOEX inside a path bracket starts a new figure.
@@ -709,6 +784,14 @@ fn emf(raw: &[u8], size_emu: (i32, i32)) -> Option<Svg> {
             break;
         }
     }
+    c.blank = only_header;
+    // An empty picture's bounds are the empty rectangle (0, 0, -1, -1); its frame (0.01 mm) sizes it.
+    let (vw, vh) = if only_header && (vw <= 0.0 || vh <= 0.0) {
+        let frame = [i32_at(raw, 24)?, i32_at(raw, 28)?, i32_at(raw, 32)?, i32_at(raw, 36)?].map(f64::from);
+        (frame[2] - frame[0], frame[3] - frame[1])
+    } else {
+        (vw, vh)
+    };
     c.finish(vw, vh)
 }
 
@@ -1080,6 +1163,73 @@ pub(crate) mod tests {
         e
     }
 
+    /// An EMF that only shows a 2x1 24-bit bitmap, cropped from `src` = (x, y, cx, cy).
+    fn bitmap_emf(src: [i32; 4], extra: Option<(u32, Vec<u8>)>) -> Vec<u8> {
+        let mut header = le(&[0, 0, 99, 49, 0, 0, 2646, 1323]);
+        header.extend(0x464D_4520u32.to_le_bytes());
+        header.extend(le(&[0x10000, 0, 0, 3, 0, 0, 0, 1024, 768, 320, 240]));
+        let mut bmi = le(&[40, 2, 1]);
+        bmi.extend(1u16.to_le_bytes());
+        bmi.extend(24u16.to_le_bytes());
+        bmi.extend(le(&[0, 8, 0, 0, 0, 0]));
+        let bits = [0u8, 0, 255, 255, 0, 0, 0, 0];
+        // Bounds, destination, source, then the offsets from the record's start (80, after these).
+        let mut body = le(&[0, 0, 1, 0, 0, 0]);
+        body.extend(src.iter().flat_map(|v| v.to_le_bytes()));
+        body.extend(le(&[80, 40, 120, 8, 0, 0x00CC_0020, 2, 1]));
+        body.extend(&bmi);
+        body.extend(bits);
+        let mut e = emf_rec(1, &header);
+        e.extend(emf_rec(17, &le(&[1])));
+        if let Some((ty, payload)) = extra {
+            e.extend(emf_rec(ty, &payload));
+        }
+        e.extend(emf_rec(81, &body));
+        e.extend(emf_rec(14, &le(&[0, 16, 20])));
+        let total = e.len() as u32;
+        e.get_mut(48..52).unwrap().copy_from_slice(&total.to_le_bytes());
+        e
+    }
+
+    #[test]
+    fn an_emf_that_only_shows_a_bitmap_is_that_bitmap() {
+        let raw = bitmap_emf([0, 0, 2, 1], None);
+        let Some(Bitmap::Dib(dib)) = single_bitmap(BLIP_EMF, &blip(&raw, [0, 0, 2, 1], (25_400, 12_700))) else { panic!("no bitmap") };
+        assert_eq!(dib.len(), 48);
+        let bmp = crate::dib_to_bmp(&dib).unwrap();
+        assert_eq!(designcraft_images::pixel_size(&bmp), Some((2, 1)));
+        // A part of the bitmap, or something else drawn with it, is left to the metafile reader.
+        assert!(single_bitmap(BLIP_EMF, &blip(&bitmap_emf([1, 0, 1, 1], None), [0, 0, 2, 1], (25_400, 12_700))).is_none());
+        // A source a few pixels past the bitmap still shows all of it; far past it does not.
+        assert!(single_bitmap(BLIP_EMF, &blip(&bitmap_emf([0, 0, 3, 2], None), [0, 0, 2, 1], (25_400, 12_700))).is_some());
+        assert!(single_bitmap(BLIP_EMF, &blip(&bitmap_emf([0, 0, 40, 1], None), [0, 0, 2, 1], (25_400, 12_700))).is_none());
+        let with_line = bitmap_emf([0, 0, 2, 1], Some((54, le(&[180, 80]))));
+        assert!(single_bitmap(BLIP_EMF, &blip(&with_line, [0, 0, 2, 1], (25_400, 12_700))).is_none());
+        assert!(single_bitmap(BLIP_WMF, &blip(&raw, [0, 0, 2, 1], (25_400, 12_700))).is_none());
+    }
+
+    #[test]
+    fn an_emf_that_is_only_a_header_is_an_empty_picture() {
+        // As in the real files: empty bounds, and a 1 x 0.75 inch frame.
+        let mut header = le(&[0, 0, -1, -1, 0, 0, 2540, 1905]);
+        header.extend(0x464D_4520u32.to_le_bytes());
+        header.extend(le(&[0x10000, 0, 0, 1, 0, 0, 0, 1024, 768, 320, 240]));
+        let mut raw = emf_rec(1, &header);
+        let total = raw.len() as u32;
+        raw.get_mut(48..52).unwrap().copy_from_slice(&total.to_le_bytes());
+        let svg = to_svg(BLIP_EMF, &blip(&raw, [0, 0, 100, 50], (25_400, 12_700))).expect("an empty picture");
+        let text = String::from_utf8(svg.data.clone()).unwrap();
+        assert!(!text.contains("<path"), "{text}");
+        assert_eq!(svg.size, (2540, 1905));
+        assert!(designcraft_images::svg_tree(&svg.data).is_some());
+        // With a record it can't draw, it is still unreadable rather than blank.
+        let mut odd = raw.clone();
+        odd.extend(emf_rec(200, &[]));
+        let total = odd.len() as u32;
+        odd.get_mut(48..52).unwrap().copy_from_slice(&total.to_le_bytes());
+        assert!(to_svg(BLIP_EMF, &blip(&odd, [0, 0, 100, 50], (25_400, 12_700))).is_none());
+    }
+
     #[test]
     fn wmf_polygon_becomes_svg() {
         let svg = to_svg(BLIP_WMF, &blip(&sample_wmf(), [0, 0, 200, 100], (2_540_000, 1_270_000))).unwrap();
@@ -1133,3 +1283,6 @@ pub(crate) mod tests {
         assert!(to_svg(0xF01C, &blip(&sample_wmf(), [0; 4], (1, 1))).is_none());
     }
 }
+
+
+

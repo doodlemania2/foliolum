@@ -971,6 +971,10 @@ impl<'a> Builder<'a> {
         };
         let data = match p.kind {
             0xF01F => dib_to_bmp(&p.data)?,
+            metafile::BLIP_EMF | metafile::BLIP_WMF if let Some(bitmap) = metafile::single_bitmap(p.kind, &p.data) => match bitmap {
+                metafile::Bitmap::Dib(dib) => dib_to_bmp(&dib)?,
+                metafile::Bitmap::Encoded(data) => data,
+            },
             metafile::BLIP_EMF | metafile::BLIP_WMF => {
                 let svg = match metafile::to_svg_report(p.kind, &p.data) {
                     Ok(svg) => svg,

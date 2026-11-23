@@ -28,6 +28,6 @@ sha2 = { workspace = true }
 cfb = { workspace = true }
 miniz_oxide = { workspace = true }
 # favicon.rs renders the web app's favicon.ico from its SVG. tiny-skia is named for its PNG encoder
-# (png-format), used through resvg's re-export.
+# (png-format), used through resvg's re-export, and gate.rs uses it to put review renders on white.
 resvg = { workspace = true }
 tiny-skia = { workspace = true }

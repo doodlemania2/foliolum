@@ -242,11 +242,28 @@ fn join_split_cells(missing: &mut Vec<&String>, extra: &mut [&String]) -> usize 
     found
 }
 
+/// The same text as the two readers give it. Control characters are left out: no one draws them
+/// (Publisher's 0x1F optional hyphen, for one, which the reader keeps). And where one side has a
+/// Latin-1 character and the other a symbol outside Latin-1, they agree: we draw a symbol font's
+/// characters as the Unicode symbols they show (Wingdings `q` as ❑), the reader keeps the letters.
+fn same_text(a: &str, b: &str) -> bool {
+    if a == b {
+        return true;
+    }
+    let drawn = |s: &str| s.chars().filter(|c| !c.is_control()).collect::<Vec<_>>();
+    let (a, b) = (drawn(a), drawn(b));
+    a.len() == b.len()
+        && a.iter().zip(&b).all(|(x, y)| {
+            let symbol_for_letter = |l: &char, s: &char| (*l as u32) < 0x100 && (*s as u32) >= 0x2000;
+            x == y || symbol_for_letter(x, y) || symbol_for_letter(y, x)
+        })
+}
+
 /// Entries of `a` that `b` doesn't have, counting repeats.
 fn minus<'a>(a: &'a [String], b: &[String]) -> Vec<&'a String> {
     let mut left: Vec<&String> = b.iter().collect();
     a.iter()
-        .filter(|s| match left.iter().position(|t| t == s) {
+        .filter(|s| match left.iter().position(|t| same_text(t, s)) {
             Some(i) => {
                 left.swap_remove(i);
                 false
@@ -289,6 +306,15 @@ mod tests {
         let ours = vec![page(1, 0, 0, &["Mon", "Daily Challenge Free timer"])];
         let theirs = vec![page(1, 0, 0, &["Free time", "Mon"])];
         assert!(!compare(&ours, &theirs).0.is_empty());
+    }
+
+    #[test]
+    fn symbol_letters_and_undrawn_controls_are_the_same_text() {
+        assert!(same_text("❑ Item", "q Item"));
+        assert!(same_text("☒ Domenica", "\u{fd} Domenica"));
+        assert!(same_text("Championships", "Champion\u{1f}ships"));
+        assert!(!same_text("a Item", "q Item"), "two letters still differ");
+        assert!(!same_text("❑ Item", "q Items"));
     }
 
     #[test]
