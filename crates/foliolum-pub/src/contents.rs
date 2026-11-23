@@ -175,9 +175,13 @@ fn parse_with_budget(b: &[u8], bytes: usize, items: usize) -> Result<Contents> {
             ordinary.push(seq);
         }
     }
+    // Publisher ends the list with four placeholders, one of them the scratch area, which can
+    // hold objects, and in a real-world bulletin a second one does too (contents-stream.md, rule 3).
+    // In every Publisher file seen, at least one placeholder lists nothing; a list whose last four
+    // all list objects is from another writer and has none.
     let tail = ordinary.len().saturating_sub(4);
     let placeholders = ordinary.len() > 4
-        && ordinary.get(tail..).ok_or(PubError::Truncated)?.iter().filter(|s| pages.get(s).is_some_and(|(p, _)| !p.shapes.is_empty())).count() <= 1;
+        && ordinary.get(tail..).ok_or(PubError::Truncated)?.iter().filter(|s| pages.get(s).is_some_and(|(p, _)| !p.shapes.is_empty())).count() < 4;
     for (i, seq) in ordinary.iter().enumerate() {
         if let Some((page, _)) = pages.get(seq) {
             if placeholders && i >= tail {
@@ -228,5 +232,66 @@ mod budget_tests {
         assert!(error.to_string().contains("aggregate parse byte limit"), "{error}");
         let error = parse_with_budget(&b, usize::MAX, 30).err().unwrap();
         assert!(error.to_string().contains("aggregate property limit"), "{error}");
+    }
+
+    /// A Contents stream whose page list holds pages with these numbers of objects, in order
+    /// (each object a plain type-1 record), after one master page with label `A`.
+    fn page_list(objects_per_page: &[usize]) -> Vec<u8> {
+        let number = |key: u8, v: u32| [vec![key, 0x20], v.to_le_bytes().to_vec()].concat();
+        let entry = |seq: u32| [vec![0x00, 0x70], seq.to_le_bytes().to_vec()].concat();
+        let first = 256u32;
+        // Sequence numbers: document, master, the pages, then every object.
+        let master = first + 1;
+        let page_seqs: Vec<u32> = (0..objects_per_page.len() as u32).map(|i| master + 1 + i).collect();
+        let mut next_object = master + 1 + objects_per_page.len() as u32;
+        let all: Vec<u32> = std::iter::once(master).chain(page_seqs.iter().copied()).collect();
+        let document = [
+            list(0x02, 0xa0, &all.iter().flat_map(|s| entry(*s)).collect::<Vec<_>>()),
+            list(0x12, 0x88, &[number(1, 7_772_400), number(2, 10_058_400)].concat()),
+        ]
+        .concat();
+        let mut records: Vec<(u16, Vec<u8>)> =
+            vec![(0x44, document), (0x43, [vec![0x0e, 0xc0], 6u32.to_le_bytes().to_vec(), b"A\0".to_vec()].concat())];
+        let mut objects = 0;
+        for &n in objects_per_page {
+            let seqs: Vec<u8> = (next_object..next_object + n as u32).flat_map(entry).collect();
+            next_object += n as u32;
+            objects += n;
+            records.push((0x43, if n > 0 { list(0x02, 0xa0, &seqs) } else { Vec::new() }));
+        }
+        records.extend(std::iter::repeat_n((1u16, Vec::new()), objects));
+        let mut b = vec![0u8; 0x1e];
+        b[..8].copy_from_slice(&[0xe8, 0xac, 0x2c, 0x00, 0xe8, 0x03, 0x0a, 0x00]);
+        b[0x0c..0x10].copy_from_slice(&[0x1a, 0x00, 0x00, 0x01]);
+        let mut directory = [0x00, 0x78].repeat(first as usize);
+        for (ty, props) in &records {
+            let at = b.len() as u32;
+            b.extend(((props.len() + 4) as u32).to_le_bytes());
+            b.extend(props);
+            let fields = [vec![0x02, 0x18], ty.to_le_bytes().to_vec(), vec![0x04, 0xb8], at.to_le_bytes().to_vec()].concat();
+            directory.extend(list(0x00, 0x88, &fields));
+        }
+        let entries = first + records.len() as u32;
+        let trailer = [number(1, entries), number(2, entries - 1), list(0x03, 0x90, &directory)].concat();
+        let at = b.len() as u32;
+        b[0x1a..0x1e].copy_from_slice(&at.to_le_bytes());
+        b.extend(((trailer.len() + 4) as u32).to_le_bytes());
+        b.extend(&trailer);
+        b
+    }
+
+    #[test]
+    fn the_last_four_entries_are_placeholders_even_when_two_hold_objects() {
+        // Four pages, then the placeholders: the scratch area with objects, an empty one, and one
+        // with a text box, as in the bulletin of LibreOffice bug 116018 (Publisher's PDF: 4 pages).
+        let c = parse(&page_list(&[3, 2, 2, 1, 5, 0, 0, 1])).unwrap();
+        assert_eq!(c.pages.len(), 4);
+        assert_eq!(c.masters.len(), 1);
+        assert!(c.warnings.iter().any(|w| w.contains("Scratch-area objects")), "{:?}", c.warnings);
+        // One placeholder with objects, as in most files.
+        assert_eq!(parse(&page_list(&[3, 2, 4, 0, 0, 0])).unwrap().pages.len(), 2);
+        // A writer without placeholders, whose pages all hold objects, keeps every page.
+        assert_eq!(parse(&page_list(&[1, 2, 3, 1, 2, 3])).unwrap().pages.len(), 6);
+        assert_eq!(parse(&page_list(&[1, 2])).unwrap().pages.len(), 2);
     }
 }
