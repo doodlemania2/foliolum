@@ -176,11 +176,15 @@ pub(crate) fn text_ranges(data: &[u8], units: &[u16]) -> Result<Vec<Range<usize>
 fn byte_positions(units: &[u16]) -> Vec<usize> {
     let mut at = Vec::with_capacity(units.len() + 1);
     let mut byte = 0;
+    let mut unit = 0;
     for decoded in char::decode_utf16(units.iter().copied()) {
         let n = decoded.as_ref().map_or(1, |c| c.len_utf16());
         at.extend(std::iter::repeat_n(byte, n));
+        let before_paragraph_end = units.get(unit + n).is_none_or(|u| *u == 13);
+        unit += n;
         byte += match decoded {
             Ok('\r' | '\t') => 1,
+            Ok('\n') if before_paragraph_end => 0,
             Ok('\u{b}' | '\n') => designcraft_doc::FORCED_LINE_BREAK.len_utf8(),
             Ok(c) if (c as u32) < 0x20 => 0,
             Ok(c) => c.len_utf8(),
@@ -883,8 +887,10 @@ mod tests {
         let brk = designcraft_doc::FORCED_LINE_BREAK;
         assert_eq!(t.cell(0, 0).unwrap().text.text, format!("Information{brk}Website"));
         assert_eq!(t.cell(0, 1).unwrap().text.text, "B");
-        let kept = import(grid(), "Information\nWebsite\r", None);
-        assert!(kept.document.stories.values().next().unwrap().text.contains(&format!("Information{brk}Website")));
+        let kept = import(grid(), "Information\nWebsite\n\r", None);
+        let host = &kept.document.stories.values().next().unwrap().text;
+        assert!(host.contains(&format!("Information{brk}Website")), "{host:?}");
+        assert!(!host.contains(&format!("Website{brk}")), "no break before the paragraph mark: {host:?}");
     }
     #[test]
     fn ambiguous_cell_text_stays_after_the_native_table() {
@@ -906,6 +912,7 @@ mod tests {
         assert!(text_ranges(&[0; 12], &units).is_err());
         assert_eq!(byte_positions(&[0xd83d, 0xde00, 13, 0xb, 9, 1]), vec![0, 0, 4, 5, 8, 9, 9]);
         assert_eq!(byte_positions(&[0x41, 0xa, 0x42]), vec![0, 1, 4, 5]);
+        assert_eq!(byte_positions(&[0x41, 0xa, 13]), vec![0, 1, 1, 2], "a line feed before a paragraph mark is dropped");
     }
     #[test]
     fn rejects_overlapping_missing_and_out_of_bounds_cells() {

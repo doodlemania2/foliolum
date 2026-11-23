@@ -1055,7 +1055,9 @@ impl<'a> Builder<'a> {
             unit += len16;
             match res {
                 Ok('\r') => text.push('\n'),
-                // 0x0B, and 0x0A in real-world files (docs/pub-format/text-store.md), break the line.
+                // 0x0B, and 0x0A in real-world files (docs/pub-format/text-store.md), break the line;
+                // a 0x0A right before the paragraph mark (or the end) adds nothing.
+                Ok('\n') if units.get(unit).is_none_or(|u| *u == 13) => {}
                 Ok('\u{000b}' | '\n') => text.push(designcraft_doc::FORCED_LINE_BREAK),
                 Ok('\t') => text.push('\t'),
                 Ok(c) if (c as u32) < 0x20 => skipped = true,
