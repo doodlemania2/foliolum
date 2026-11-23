@@ -68,6 +68,12 @@ is excused, with a note, up to the number of extra text boxes we have, because W
 read may reach it as a bare shape. Empty pages the reader leaves out are noted. If the reader can't read
 a file, or finds no pages where we found content, completeness is unchecked: never a pass.
 
+**Cells split in two.** Publisher can list one table cell twice, once for each half of a split cell.
+We keep both halves' text in the one cell, one after the other, and warn that the split isn't drawn;
+the reader lists the halves as separate texts, and sometimes stops reading the table there. A reader
+text that is a word-bounded leading or trailing part of one of our unmatched texts is therefore held,
+not lost: it is noted, and that part of ours is used up so it can't vouch twice.
+
 With these rules Pubwork finds no loss in any of the 142 pubsmith imports, which the layout export
 already confirms (one, `wordart__line-white`, only through the WordArt rule), or in the 19 dev22 files
 that open. `results.jsonl` keeps both page summaries whenever the readers differ.

@@ -197,8 +197,12 @@ pub fn compare(ours: &[Page], theirs: &[Page]) -> (Vec<String>, Vec<String>) {
                 notes.push(format!("page {n} {what} {x} vs Pubwork {y}"));
             }
         }
-        let missing = minus(&b.stories, &a.stories);
+        let mut missing = minus(&b.stories, &a.stories);
         let extra = minus(&a.stories, &b.stories);
+        let split = join_split_cells(&mut missing, &mut extra.clone());
+        if split > 0 {
+            notes.push(format!("page {n} {split} text(s) the reader lists apart that we hold joined to a neighbour (a cell split in two)"));
+        }
         if let Some(m) = missing.first() {
             let ours = extra.first().map_or(String::new(), |e| format!(" (ours has {:?})", clip(e)));
             diffs.push(format!("page {n} text missing or different: {} of the reader's, e.g. {:?}{ours}", missing.len(), clip(m)));
@@ -207,6 +211,35 @@ pub fn compare(ours: &[Page], theirs: &[Page]) -> (Vec<String>, Vec<String>) {
         }
     }
     (diffs, notes)
+}
+
+/// A table cell split in two keeps both halves' text, one after the other, in one cell of ours
+/// (gate/README.md, "Cells split in two"), where the reader lists each half, or only some of them.
+/// A reader text that is a word-bounded leading or trailing part of one of our unmatched texts is
+/// held there, not lost: remove it, and use up that part of ours so it can't count twice.
+/// Returns how many reader texts were found that way.
+fn join_split_cells(missing: &mut Vec<&String>, extra: &mut [&String]) -> usize {
+    let mut rest: Vec<String> = extra.iter().map(|s| s.to_string()).collect();
+    let mut found = 0;
+    missing.retain(|m| {
+        for r in rest.iter_mut() {
+            if r.is_empty() {
+                continue;
+            } else if r == *m {
+                r.clear();
+            } else if let Some(tail) = r.strip_prefix(m.as_str()).and_then(|t| t.strip_prefix(' ')) {
+                *r = tail.to_string();
+            } else if let Some(head) = r.strip_suffix(m.as_str()).and_then(|t| t.strip_suffix(' ')) {
+                *r = head.to_string();
+            } else {
+                continue;
+            }
+            found += 1;
+            return false;
+        }
+        true
+    });
+    found
 }
 
 /// Entries of `a` that `b` doesn't have, counting repeats.
@@ -239,6 +272,23 @@ mod tests {
     fn the_same_pages_agree() {
         let p = vec![page(2, 1, 3, &["A headline", "Some body text"])];
         assert_eq!(compare(&p, &p), (vec![], vec![]));
+    }
+
+    #[test]
+    fn a_split_cell_held_as_one_text_is_noted_not_failed() {
+        let ours = vec![page(1, 0, 0, &["Mon", "Daily Challenge Free time"])];
+        let theirs = vec![page(1, 0, 0, &["Daily Challenge", "Free time", "Mon"])];
+        let (diffs, notes) = compare(&ours, &theirs);
+        assert!(diffs.is_empty(), "{diffs:?}");
+        assert!(notes.iter().any(|n| n.contains("2 text(s) the reader lists apart")), "{notes:?}");
+        // The reader may list only one half; it is still held, and only once.
+        let theirs = vec![page(1, 0, 0, &["Free time", "Free time", "Mon"])];
+        let (diffs, _) = compare(&ours, &theirs);
+        assert!(diffs.iter().any(|d| d.contains("1 of the reader's")), "{diffs:?}");
+        // Only a word-bounded part counts.
+        let ours = vec![page(1, 0, 0, &["Mon", "Daily Challenge Free timer"])];
+        let theirs = vec![page(1, 0, 0, &["Free time", "Mon"])];
+        assert!(!compare(&ours, &theirs).0.is_empty());
     }
 
     #[test]

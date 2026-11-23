@@ -12,7 +12,7 @@ const MAX_CELLS: usize = 10_000;
 fn bad(message: &str) -> PubError {
     PubError::Malformed(format!("table: {message}"))
 }
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct CellInfo {
     pub row: usize,
     pub last_row: usize,
@@ -106,7 +106,12 @@ impl TableInfo {
     }
     pub(crate) fn validate(&self) -> Result<()> {
         let mut occupied = vec![false; self.rows.len() * self.columns.len()];
-        for c in &self.cells {
+        for (i, c) in self.cells.iter().enumerate() {
+            // A record that repeats the one before it is the same cell listed twice (tables.md,
+            // "Cells listed twice"); it covers nothing new.
+            if i > 0 && self.cells.get(i - 1) == Some(c) {
+                continue;
+            }
             if c.row > c.last_row || c.col > c.last_col || c.last_row >= self.rows.len() || c.last_col >= self.columns.len() {
                 return Err(bad("invalid cell rectangle"));
             }
@@ -505,15 +510,36 @@ impl Builder<'_> {
             cell.border_overrides = [true; 4];
         }
         let bytes = byte_positions(&qs.units);
+        // Fold each record that repeats the one before it into that cell: its text follows the
+        // first record's, after the separator between them, which becomes a paragraph break.
+        let mut regions: Vec<(&CellInfo, Option<Range<usize>>)> = Vec::with_capacity(info.cells.len());
+        let mut repeated = 0usize;
         for (i, region) in info.cells.iter().enumerate() {
+            let range = ranges.and_then(|r| r.get(i)).cloned();
+            match regions.last_mut() {
+                Some((last, last_range)) if *last == region => {
+                    repeated += 1;
+                    if let (Some(a), Some(b)) = (last_range.as_mut(), range) {
+                        a.end = b.end;
+                    }
+                }
+                _ => regions.push((region, range)),
+            }
+        }
+        for (region, range) in regions {
             let cell = table.cell_mut(region.row, region.col).ok_or_else(|| bad("missing native cell"))?;
             cell.row_span = (region.last_row - region.row + 1) as u32;
             cell.col_span = (region.last_col - region.col + 1) as u32;
-            if can_assign && let Some(range) = ranges.and_then(|r| r.get(i)) {
+            if can_assign && let Some(range) = range {
                 let a = *bytes.get(range.start).ok_or_else(|| bad("missing text start"))?;
                 let z = *bytes.get(range.end).ok_or_else(|| bad("missing text end"))?;
                 cell.text = cell_story(&source, a..z, &mut self.table_work)?;
             }
+        }
+        if repeated > 0 {
+            self.warnings.push(format!(
+                "Publisher table lists {repeated} cell(s) twice, as for a cell split in two; both parts' text is in the one cell, one after the other, and the split is not drawn."
+            ));
         }
         let mut host = if can_assign {
             let mut host = Story::new(sid);
@@ -821,6 +847,28 @@ mod tests {
         assert_eq!(t.cell(1, 1).unwrap().text.text, "Value");
         assert!(!host.text.contains("Head"), "the text is in the cells, not kept after the table");
         assert!(!imp.warnings.iter().any(|w| w.contains("original text was retained")), "{:?}", imp.warnings);
+    }
+    #[test]
+    fn a_cell_listed_twice_holds_both_texts_and_warns() {
+        // As in a real-world file (LibreOffice bug 60556): the same rectangle twice in a row.
+        let mut info = grid();
+        let bottom = CellInfo { row: 1, last_row: 1, col: 0, last_col: 1 };
+        info.cells = vec![info.cells[0].clone(), info.cells[1].clone(), bottom.clone(), bottom];
+        info.validate().unwrap();
+        let text = "A\rB\rLeft\rRight\r";
+        let ranges = text_ranges(&table_data(&[1, 3, 8, 15]), &text.encode_utf16().collect::<Vec<_>>()).unwrap();
+        let imp = import(info, text, Some(ranges));
+        let t = imp.document.stories.values().next().unwrap().tables.values().next().unwrap();
+        let both = &t.cell(1, 0).unwrap().text;
+        assert_eq!(both.text.replace(['\r', '\n'], "|"), "Left|Right");
+        assert_eq!(both.paras.len(), 2);
+        assert_eq!(t.cell(1, 0).unwrap().col_span, 2);
+        assert!(imp.warnings.iter().any(|w| w.contains("lists 1 cell(s) twice")), "{:?}", imp.warnings);
+        // Listed twice but not one after the other is still an overlap.
+        let mut apart = grid();
+        let c = apart.cells.clone();
+        apart.cells = vec![c[0].clone(), c[1].clone(), c[0].clone(), c[2].clone(), c[3].clone()];
+        assert!(apart.validate().is_err());
     }
     #[test]
     fn ambiguous_cell_text_stays_after_the_native_table() {
