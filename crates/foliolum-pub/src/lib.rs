@@ -33,7 +33,9 @@
 //! numbering and unrecognized paragraph formatting. Bullets and exact/multiple line spacing are imported. WMF/EMF pictures come over as vector SVG without their text,
 //! bitmaps, arcs and pattern fills (`metafile.rs`). Groups (nested too) stay groups. Shaded
 //! fills become gradient swatches (centre and outline shades as radial approximations); dashes
-//! and arrowheads come over.
+//! and arrowheads come over. BorderArt is drawn as one SVG picture over its frame, in the pieces'
+//! own colours (Publisher's recolouring is not read; `borderart.md`). An EMF that is one bitmap
+//! comes over as that bitmap.
 //! Each omission is reported in [`Imported::warnings`].
 //!
 //! Linked text frames are supported: a story shown in several frames is imported once and
@@ -41,6 +43,7 @@
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 #![forbid(unsafe_code)]
 
+mod borderart;
 mod contents;
 mod escher;
 mod metafile;
@@ -489,6 +492,27 @@ impl<'a> Builder<'a> {
                 _ => {}
             }
         }
+        if let Some(index) = info.border_art
+            && let Some(b) = self.border_art(r, rect, xf, sh, index as usize)
+            && let Some(item) = self.doc.item_mut(id)
+        {
+            item.stroke = Stroke::none();
+            // Text stays inside the border (borderart.md): two bulletin frames' first lines sit
+            // under it otherwise.
+            if let Content::Text(t) = &mut item.content {
+                for side in &mut t.options.inset {
+                    *side += b;
+                }
+            } else if follower {
+                for (fid, inset, _) in &mut self.followers {
+                    if *fid == id {
+                        for side in inset.iter_mut() {
+                            *side += b;
+                        }
+                    }
+                }
+            }
+        }
         if wordart.is_none() {
             self.shadow(id, sh);
         }
@@ -930,6 +954,62 @@ impl<'a> Builder<'a> {
         }
     }
 
+    /// The BorderArt around a frame, as one SVG picture over it (docs/pub-format/borderart.md).
+    /// Its width is the frame's line width. Returns that width (pt) if it was drawn; if not, the
+    /// frame keeps its plain line and a warning says why.
+    fn border_art(&mut self, r: SpreadRef, rect: Rect, xf: Affine, sh: &escher::EShape, index: usize) -> Option<f64> {
+        let Some(art) = self.c.border_arts.get(index).cloned().flatten() else {
+            self.warnings.push("A BorderArt border could not be read; its frame has a plain line instead.".into());
+            return None;
+        };
+        let width_emu = sh.prop(0x01cb).or(art.size_emu).filter(|w| *w > 0).unwrap_or(12_700);
+        let b = pt(f64::from(width_emu));
+        let size = (width_emu as i32, width_emu as i32);
+        let mut pieces = Vec::with_capacity(art.pieces.len());
+        for data in &art.pieces {
+            let Some(svg) = metafile::wmf_to_svg(data, size) else {
+                self.warnings
+                    .push(format!("The BorderArt \"{}\" has a picture that could not be read; its frame has a plain line instead.", art.name));
+                return None;
+            };
+            self.warnings.extend(svg.warnings.iter().map(|w| (*w).to_string()));
+            let piece = borderart::piece(&svg.data)?;
+            pieces.push(piece);
+        }
+        let places = art.places.map(|i| &pieces[i]);
+        let Some(svg) = borderart::svg(places, rect.width(), rect.height(), b) else {
+            self.warnings.push(format!("The BorderArt \"{}\" is wider than its frame allows; the frame has a plain line instead.", art.name));
+            return None;
+        };
+        let px = ((rect.width() * 4.0).round().clamp(1.0, 100_000.0), (rect.height() * 4.0).round().clamp(1.0, 100_000.0));
+        let asset = AssetId(self.doc.alloc());
+        let asset = self.doc.add_asset(Asset {
+            id: asset,
+            name: format!("borderart-{index}.svg"),
+            mime: "image/svg+xml".into(),
+            data: designcraft_doc::AssetData::embedded(svg.into_bytes()),
+            pixels: Some((px.0 as u32, px.1 as u32)),
+            ..Default::default()
+        });
+        let mut item = Item::new(ItemId(self.doc.alloc()), self.layer, Shape::Rectangle, shapes::rectangle(rect));
+        item.content = Content::Graphic(Graphic {
+            layer_options: None,
+            asset,
+            size: px,
+            xf: Affine::translate((rect.x0, rect.y0)) * Affine::scale_non_uniform(rect.width() / px.0, rect.height() / px.1),
+            clip: None,
+            auto_fit: Default::default(),
+            fit_align: 4,
+            crop: [0.0; 4],
+            wrap: Default::default(),
+            fill: Fill::none(),
+        });
+        item.fill = Fill::none();
+        item.stroke = Stroke::none();
+        item.xf = xf;
+        self.doc.insert_item(r, item, None).ok().map(|_| b)
+    }
+
     fn picture_content(&mut self, pib: u32, frame: Rect, sh: &escher::EShape) -> Content {
         let asset = match self.pictures.get(&pib) {
             Some(a) => *a,
@@ -1365,6 +1445,42 @@ mod tests {
 
     fn styled(props: &[(u16, u32)]) -> escher::EShape {
         escher::EShape { kind: 1, props: props.iter().copied().collect(), ..Default::default() }
+    }
+
+    #[test]
+    fn borderart_draws_over_its_frame_instead_of_the_line_and_keeps_the_text_inside() {
+        let mut c = contents::Contents { width_emu: 612 * 12_700, height_emu: 792 * 12_700, ..Default::default() };
+        let art = borderart::BorderArt { name: "Test".into(), size_emu: Some(127_000), places: [0; 8], pieces: vec![metafile::tests::sample_wmf()] };
+        c.border_arts = vec![Some(art)];
+        c.shapes.insert(1, contents::ShapeInfo { text_id: Some(7), border_art: Some(0), ..Default::default() });
+        c.shapes.insert(2, contents::ShapeInfo { text_id: Some(8), border_art: Some(5), ..Default::default() });
+        let mut q = quill::Quill::default();
+        q.stories.insert(7, quill::QStory { units: "Hello\r".encode_utf16().collect(), ..Default::default() });
+        q.stories.insert(8, quill::QStory { units: "Plain\r".encode_utf16().collect(), ..Default::default() });
+        let dr = escher::Drawing::default();
+        let mut b = Builder::new(&c, &q, &dr).unwrap();
+        // A 10 pt line, black.
+        let line = [(0x01cb, 127_000), (0x01c0, 0), (0x01ff, 0x0008_0008)];
+        let mut sh = frame(1, -100.0);
+        sh.props = line.into();
+        b.place(&sh, SpreadRef::Doc(0), 0).unwrap();
+        let items = &b.doc.spreads[0].items;
+        let (text, border) = (&items[items.len() - 2], &items[items.len() - 1]);
+        assert!(text.stroke.weight == 0.0 || text.stroke.swatch == designcraft_color::swatch::NONE, "the frame's own line is dropped");
+        let Content::Text(t) = &text.content else { panic!("text frame first") };
+        assert!(t.options.inset.iter().all(|i| *i >= 10.0), "text inside the border: {:?}", t.options.inset);
+        let Content::Graphic(g) = &border.content else { panic!("border picture on top") };
+        let asset = &b.doc.assets[&g.asset];
+        assert_eq!(asset.mime, "image/svg+xml");
+        assert!(designcraft_images::svg_tree(asset.data.embedded_bytes().unwrap()).is_some());
+        assert_eq!(border.bounds(), text.bounds());
+        // A definition that isn't there: the plain line stays, with a warning.
+        let mut sh = frame(2, 50.0);
+        sh.props = line.into();
+        b.place(&sh, SpreadRef::Doc(0), 0).unwrap();
+        let plain = b.doc.spreads[0].items.last().unwrap();
+        assert!(plain.stroke.weight > 0.0);
+        assert!(b.warnings.iter().any(|w| w.contains("BorderArt border could not be read")), "{:?}", b.warnings);
     }
 
     #[test]

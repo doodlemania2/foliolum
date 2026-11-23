@@ -99,6 +99,9 @@ them; the reader keeps Publisher's 0x1F optional hyphen), and a Latin-1 letter o
 symbol outside Latin-1 on the other, because we draw symbol-font text (Wingdings, Webdings, Symbol)
 as the Unicode symbols it shows where the reader keeps the letters.
 
+**BorderArt.** We draw a BorderArt border as one picture; the reader draws each of its tiles as a
+picture. On a page with BorderArt, fewer pictures than the reader found is noted, not failed.
+
 **Cells split in two.** Publisher can list one table cell twice, once for each half of a split cell.
 We keep both halves' text in the one cell, one after the other, and warn that the split isn't drawn;
 the reader lists the halves as separate texts, and sometimes stops reading the table there. A reader

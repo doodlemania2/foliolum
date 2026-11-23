@@ -47,6 +47,15 @@ pub(crate) fn to_svg(kind: u16, blip: &[u8]) -> Option<Svg> {
     }
 }
 
+/// A bare WMF (no Escher blip header) as SVG, sized by its own window; `size_emu` only sets the
+/// width of hairlines.
+pub(crate) fn wmf_to_svg(raw: &[u8], size_emu: (i32, i32)) -> Option<Svg> {
+    if raw.len() > MAX_METAFILE {
+        return None;
+    }
+    wmf(raw, [0; 4], size_emu)
+}
+
 pub(crate) fn to_svg_report(kind: u16, blip: &[u8]) -> std::result::Result<Option<Svg>, &'static str> {
     if blip.get(32) == Some(&0xFE)
         && let Some(body) = blip.get(34..)

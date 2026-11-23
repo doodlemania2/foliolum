@@ -18,6 +18,9 @@ pub(crate) struct ShapeInfo {
     pub valign: Option<u32>,
     pub is_table: bool,
     pub table: Option<crate::tables::TableInfo>,
+    /// Key 0x09 (kind 0x18): the BorderArt drawn around the object, by its position in
+    /// [`Contents::border_arts`].
+    pub border_art: Option<u32>,
 }
 #[derive(Default)]
 pub(crate) struct Contents {
@@ -27,6 +30,8 @@ pub(crate) struct Contents {
     pub masters: Vec<PageInfo>,
     pub shapes: HashMap<u32, ShapeInfo>,
     pub palette: Vec<[u8; 3]>,
+    /// The type-0x46 record's BorderArt definitions (`None` for one that doesn't check out).
+    pub border_arts: Vec<Option<crate::borderart::BorderArt>>,
     pub warnings: Vec<String>,
 }
 pub(crate) fn rgb_of(c: u32) -> [u8; 3] {
@@ -71,7 +76,7 @@ fn parse_with_budget(b: &[u8], bytes: usize, items: usize) -> Result<Contents> {
         }
         let fields = budget.properties(entry.data)?;
         let (Some(ty), Some(at)) = (number(&fields, 2), number(&fields, 4)) else { continue };
-        if !matches!(ty, 1 | 0x10 | 0x20 | 0x30 | 0x43 | 0x44 | 0x5c | 0x63) {
+        if !matches!(ty, 1 | 0x10 | 0x20 | 0x30 | 0x43 | 0x44 | 0x46 | 0x5c | 0x63) {
             continue;
         }
         let p = budget.properties(record(b, at as usize)?)?;
@@ -111,6 +116,7 @@ fn parse_with_budget(b: &[u8], bytes: usize, items: usize) -> Result<Contents> {
                 }
                 cell_lists.insert(seq, cells);
             }
+            0x46 => c.border_arts = crate::borderart::parse(&p)?,
             0x5c => {
                 for array in p.iter().filter(|v| v.kind == 0xa0) {
                     for color in array.children()? {
@@ -136,6 +142,7 @@ fn parse_with_budget(b: &[u8], bytes: usize, items: usize) -> Result<Contents> {
                         valign: number(&p, 0x35),
                         is_table: ty == 0x10,
                         table,
+                        border_art: p.iter().find(|v| v.key == 0x09 && v.kind == 0x18).and_then(|v| v.number()),
                     },
                 );
             }

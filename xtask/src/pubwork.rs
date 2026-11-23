@@ -30,6 +30,14 @@ pub struct Page {
     /// Ours only: the page has nothing of its own, only what its master page shows.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub only_master: bool,
+    /// Ours only: BorderArt borders on the page. Each is one picture of ours; the reader counts
+    /// every tile of it as a picture.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub border_art: usize,
+}
+
+fn is_zero(n: &usize) -> bool {
+    *n == 0
 }
 
 #[derive(Deserialize, Debug)]
@@ -153,7 +161,12 @@ pub fn ours(d: &Document) -> Vec<Page> {
                         s.stories.extend(table.cells.iter().map(|c| norm(&c.text.text)).filter(|t| !t.is_empty()));
                     }
                 }
-                Content::Graphic(_) => s.image += 1,
+                Content::Graphic(g) => {
+                    s.image += 1;
+                    if d.assets.get(&g.asset).is_some_and(|a| a.name.starts_with("borderart-")) {
+                        s.border_art += 1;
+                    }
+                }
                 _ => s.shape += 1,
             }
         }
@@ -204,7 +217,12 @@ pub fn compare(ours: &[Page], theirs: &[Page]) -> (Vec<String>, Vec<String>) {
         for (what, x, y) in
             [("text boxes", a.text, b.text), ("pictures", a.image, b.image), ("shapes", a.shape + wordart, b.shape), ("tables", a.table, b.table)]
         {
-            if x < y {
+            if what == "pictures" && x < y && a.border_art > 0 {
+                notes.push(format!(
+                    "page {n} pictures {x} vs Pubwork {y}: {} BorderArt border(s), each one picture here and a picture per tile there",
+                    a.border_art
+                ));
+            } else if x < y {
                 diffs.push(format!("page {n} {what} {x} vs Pubwork {y}"));
             } else if x > y {
                 notes.push(format!("page {n} {what} {x} vs Pubwork {y}"));
@@ -297,7 +315,17 @@ mod tests {
     use super::*;
 
     fn page(text: usize, image: usize, shape: usize, stories: &[&str]) -> Page {
-        Page { w: 612.0, h: 792.0, text, image, shape, table: 0, stories: stories.iter().map(|s| s.to_string()).collect(), only_master: false }
+        Page {
+            w: 612.0,
+            h: 792.0,
+            text,
+            image,
+            shape,
+            table: 0,
+            stories: stories.iter().map(|s| s.to_string()).collect(),
+            only_master: false,
+            border_art: 0,
+        }
     }
 
     #[test]
@@ -352,6 +380,17 @@ mod tests {
         // A page of its own content the reader leaves out is still a difference.
         let ours = vec![page(2, 0, 0, &["Gloria"]), page(1, 0, 0, &[])];
         assert!(!compare(&ours, &theirs).0.is_empty());
+    }
+
+    #[test]
+    fn borderart_tiles_are_noted_not_counted_as_missing_pictures() {
+        let mut ours = page(1, 2, 0, &[]);
+        ours.border_art = 1;
+        let (diffs, notes) = compare(&[ours], &[page(1, 113, 0, &[])]);
+        assert!(diffs.is_empty(), "{diffs:?}");
+        assert!(notes.iter().any(|n| n.contains("BorderArt")), "{notes:?}");
+        // Without BorderArt the shortfall is still a loss.
+        assert!(!compare(&[page(1, 2, 0, &[])], &[page(1, 113, 0, &[])]).0.is_empty());
     }
 
     #[test]

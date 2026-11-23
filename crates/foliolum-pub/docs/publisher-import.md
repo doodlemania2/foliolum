@@ -34,6 +34,8 @@ Every open returns:
 - WordArt as editable text with its font, style, alignment and letter fill and line. The default
   upward arch follows its curved path; other warps come over straight.
 - Tables with their row and column sizes, merged cells and cell text.
+- BorderArt: the picture borders around frames, drawn from their pieces as one picture (in the
+  pieces' own colours; Publisher's recolouring is not read).
 
 ## What does not (each reported as a warning or a note)
 
@@ -76,6 +78,7 @@ drawing was omitted. These are parser/conversion limits, not a total process-mem
 - **Rewrite.** The `Contents`, Quill and bounded-reader modules (`contents.rs`, `quill.rs`, `read.rs`) were rewritten from the notes alone by a different assistant (the builder, Codex), in a repository where those original files had been deleted. The builder was allowed only the notes, the public specifications (MS-CFB, MS-ODRAW) and the sample files. The other modules were written and extended from the notes and the public specifications.
 - **ECMA-376.** The outline of the heart preset follows the definition in ECMA-376, 5th edition, Part 1 (Ecma International, 2016), `presetShapeDefinitions.xml`. The formulas are re-expressed in this project's own code and notes; no Ecma file or text is committed. The Ecma copyright permission has not been separately reviewed here; a maintainer should confirm that this attribution is sufficient.
 - **Samples.** Apache POI's `Sample2.pub` (SHA-256 `c87ea7cc5606023c5fa99376631bbd45a8e9bdaba34c958057995b0e7ac8cc86`) and 142 generated fixtures from the pubsmith project were used as input data only. None is committed, and no rights in them are claimed.
+- **Real-world samples (2026-11-23).** 33 `.pub` files attached to LibreOffice import bugs (`gate/README.md`, the lobz set) were used as input data, and some of what they hold was worked out from their bytes against the public MS-WMF, MS-EMF and MS-ODRAW specifications: table cell text order, cells listed twice, line feeds, page-list placeholders, single-bitmap EMFs and BorderArt (`pub-format/`). Two of those bugs also attach the PDF the file's author exported from Publisher; they were used to check page count and layout only. None of these files is committed, and no rights in them are claimed.
 - `truth/*.json` exports that come with the controlled samples were used only to score imports, never to work out how anything is encoded.
 - No Publisher-authored file is committed. The committed test files under `crates/pub/tests/data/` are synthetic: the importer's tests write every byte of them from scratch (`crates/pub/tests/support/mod.rs`), and a test checks that each committed file is exactly that output. They are listed in `ASSETS.md`.
 
