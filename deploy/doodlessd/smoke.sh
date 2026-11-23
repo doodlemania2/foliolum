@@ -94,6 +94,10 @@ expect_header "^content-security-policy: default-src 'none'" /favicon.svg
 
 get /no-such-file.js
 expect_status 404 /no-such-file.js
+# A missing file is never cached, or it stays missing at Cloudflare after it is added (#29).
+expect_header '^cache-control: no-store' /no-such-file.js
+grep -qi '^cache-control:.*immutable' <<<"$headers" && fail "/no-such-file.js: a 404 marked immutable"
+expect_header "^content-security-policy: default-src 'none'" /no-such-file.js
 
 if [ "$fails" -gt 0 ]; then echo "$fails check(s) failed" >&2; exit 1; fi
 echo "smoke ok"
