@@ -110,7 +110,7 @@ fn parse_with_budget(b: &[u8], bytes: usize, items: usize) -> Result<Contents> {
             }
             0x63 => {
                 let cells = crate::tables::cells(&p)?;
-                total_cell_records = total_cell_records.saturating_add(cells.len());
+                total_cell_records = total_cell_records.saturating_add(cells.0.len());
                 if total_cell_records > 100_000 {
                     return Err(PubError::Malformed("too many table cell records".into()));
                 }
@@ -152,11 +152,11 @@ fn parse_with_budget(b: &[u8], bytes: usize, items: usize) -> Result<Contents> {
     for shape in c.shapes.values_mut() {
         if let Some(table) = &mut shape.table {
             if let Some(cells) = cell_lists.get(&table.cell_record) {
-                linked_cells = linked_cells.saturating_add(cells.len());
+                linked_cells = linked_cells.saturating_add(cells.0.len());
                 if linked_cells > 100_000 {
                     return Err(PubError::Malformed("too many linked table cells".into()));
                 }
-                table.cells = cells.clone();
+                (table.cells, table.margins) = cells.clone();
                 table.validate()?;
             } else {
                 shape.table = None;

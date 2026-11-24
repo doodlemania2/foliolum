@@ -43,9 +43,9 @@ in DesignCraft. Reject out-of-range, overlapping or incomplete cell rectangles.
 A row-spanning example is absent; the same inclusive rectangle representation
 can be exercised synthetically, but is not independently confirmed by a file.
 
-Other repeated cell fields are 0x09 = 228180, 0x0A–0x0D = 36576, and 0x0E =
-114300. Their precise meanings are not confirmed by differing samples; do not
-use them to invent fills, borders, padding or alignment.
+Keys 0x0A–0x0D are the cell's text margins in EMU (see "Cell margins" below).
+Keys 0x09 (228180, 219188 and others) and 0x0E (114300 or 228600) vary too; their
+meanings are not confirmed, so they are not used for alignment or anything else.
 
 ## Quill cell text: `TCD `
 
@@ -90,18 +90,74 @@ Association across several stories/TCD sections uses the SYID slot rule below
 (confirmed by the same files: each table's story sits at the SYID position named by
 its TCD entry's slot field). Retain text and warn when that association is ambiguous.
 
-## Cell fills and borders: unconfirmed
+## Cell fills and borders
 
-The three fixtures have no independent cell-fill or border-setting variants.
-Their Quill `MCLD` sections contain one formatting block per cell (130 bytes per
-block in these files). Block fields include 0x00–0x03 values near 0x1F00 and
-0x06–0x09 = 36576; no differing setting establishes their interpretation.
-Escher supplies table-frame line properties but does not establish per-cell
-formatting. Do not reinterpret the unknown MCLD integers as RGB colours, line
-weights, or swatch indices. Import confirmed geometry, merges and text; use
-unpainted cell fills/edges and warn explicitly that cell fills, borders and
-other cell formatting were not decoded. In particular, clear DesignCraft's
-normal default black borders rather than inventing them.
+A table's cell fills and edge borders are not in its Contents records or in the
+Quill `MCLD` section. Each one is a shape of its own in an Escher drawing: an
+`SpContainer` at the top level of a `SpgrContainer`, with no client data (so no
+`0x6801` and no page) and a client anchor that holds other ids than a page
+shape's. Absent ids are 0.
+
+| Anchor id | Meaning |
+|---|---|
+| 0x6802 | The table's `Contents` sequence number (the type-0x10 record). |
+| 0x2001 | Role: 0 a cell, 1 a horizontal edge, 2 a vertical edge. |
+| 0x2003 | A cell's position in the table's type-0x63 cell list (record order, as for `TCD ` text). |
+| 0x2004 / 0x2005 | An edge's start grid point: row line, column line. |
+| 0x2006 / 0x2007 | An edge's end grid point. A horizontal edge keeps its row line, a vertical edge its column line. |
+
+Grid lines are numbered from 0 at the table's top and left. An edge spans one or
+more grid segments, and a merged cell's side can be one edge (in bug 84096, row
+lines 4 to 8 on column line 0). Each part is an Escher rectangle (FSP type 1)
+whose **fill** paints it: `fillColor` (0x0181) is the cell's fill or the edge's
+colour, and `fFilled` (0x01BF bit 4) turns it off. An edge's width is `lineWidth`
+(0x01CB); an edge without one is Escher's default 9525 EMU (0.75 pt). The parts'
+`lineColor` and line booleans are not what Publisher draws. No sample has a
+dashed or patterned edge (0x01CE is never set), so edges are drawn solid.
+
+Evidence, all from the LibreOffice Bugzilla files (`gate/README.md`) and the
+PDFs their authors exported from Publisher:
+
+- Bug 84096 (and the same certificate in 89061): 35 edges, black, 0x01CB = 19050
+  (1.5 pt). Drawn by these rules they give every line of the pedigree brackets in
+  Publisher's PDF (attachment 106882) and no others; the certificate's other table
+  has no parts and no lines in the PDF.
+- Bug 89393: two tables, every edge 0.5 pt or 1 pt black; drawn they match the
+  Publisher PDF (attachment 113399) edge for edge.
+- Bug 116018: the mass schedule's day separators and outer border are palette
+  colour 0 with no width (thin in the PDF); its in-day edges are palette colour 7,
+  white, and don't show in the PDF (attachment 140163).
+- Bug 60556: 49 parts, most of them cells with RGB fills (yellow, two greens,
+  blues, orange, red, grey); by cell-list position they colour an itinerary's
+  activities consistently (every "Lunch" and "Dinner" the same green).
+- No pubsmith or Apache table has any parts, and none of them shows lines.
+
+The importer gives a cell side the edge when the edges on that grid line cover
+the whole side (the heaviest of them if they differ), and leaves other sides
+with explicit no-stroke. DesignCraft resolves a stretch two cells share in
+favour of the visible copy, so either neighbour carrying it draws it. An edge
+covering only part of a merged cell's side, where the cell on the other side
+doesn't carry it either, is not drawn and is reported; so are parts outside the
+grid or naming a missing cell.
+
+## Cell margins
+
+Type-0x63 cell keys 0x0A, 0x0B, 0x0C and 0x0D are the cell's text margins in
+EMU, read as **left, right, top, bottom**. An absent key is 0, as for the row and
+column keys.
+
+- Publisher's default cell margin, 0.04 in, is 36576 EMU: every cell of the
+  pubsmith and Apache tables, and most real-world ones, store 36576 four times.
+- In bug 116018's agenda table some cells store none of the four; in the
+  Publisher PDF their text ("Dom. 28") touches the cell's left line.
+- Decoding the margins (instead of DesignCraft's 4 pt) removes the growth that
+  made seven real-world tables 10–45% taller than their stored rows (and pushed
+  the 84096 pedigree into the paragraph below it); one table still grows 3%.
+- The order is inferred, not confirmed. Custom margins come in pairs: the 84096
+  pedigree stores 0x0A = 0x0B = 18415 with no 0x0C/0x0D, which reads as left =
+  right in Publisher's Cell Properties order (left, right, top, bottom). The other
+  file with differing values (bug 95894) differs only in 0x0A, which is left in
+  either order. A file whose cells differ in 0x0B or 0x0C alone would settle it.
 
 ## Native mapping and limits
 

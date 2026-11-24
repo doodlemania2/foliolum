@@ -1,7 +1,9 @@
 // Copyright (c) 2026 srt8hellcat2-ui. SPDX-License-Identifier: MIT OR Apache-2.0
 //! Confirmed table geometry and cell-text boundaries; see docs/pub-format/tables.md.
 use crate::{
-    Builder, PubError, Result, SpreadRef, pt,
+    Builder, PubError, Result, SpreadRef,
+    escher::EShape,
+    pt,
     read::{Prop, count, number, slice, u32_at},
 };
 use designcraft_doc::{CellStroke, ItemId, ParaFormat, Story, StoryId, Table};
@@ -9,6 +11,8 @@ use designcraft_geom::Rect;
 use std::ops::Range;
 
 const MAX_CELLS: usize = 10_000;
+/// Escher's default line width, 0.75 pt, for an edge that stores none.
+const DEFAULT_EDGE_EMU: u32 = 9525;
 fn bad(message: &str) -> PubError {
     PubError::Malformed(format!("table: {message}"))
 }
@@ -25,6 +29,8 @@ pub(crate) struct TableInfo {
     pub rows: Vec<u32>,
     pub columns: Vec<u32>,
     pub cells: Vec<CellInfo>,
+    /// Each cell record's text margins in EMU, left, right, top, bottom (keys `0x0a..=0x0d`).
+    pub margins: Vec<[u32; 4]>,
     pub cell_record: u32,
     /// Largest absolute ending-versus-size-sum difference in this table, for diagnostics only.
     pub row_ending_difference: u32,
@@ -102,7 +108,15 @@ impl TableInfo {
             approximations.push("row heights come from the stored row sizes; the stored row endings are not increasing".to_string());
             (row_sizes, 0)
         };
-        Ok(Some(Self { columns: column_sizes, rows: rows_out, cells: Vec::new(), cell_record, row_ending_difference, approximations }))
+        Ok(Some(Self {
+            columns: column_sizes,
+            rows: rows_out,
+            cells: Vec::new(),
+            margins: Vec::new(),
+            cell_record,
+            row_ending_difference,
+            approximations,
+        }))
     }
     pub(crate) fn validate(&self) -> Result<()> {
         let mut occupied = vec![false; self.rows.len() * self.columns.len()];
@@ -131,25 +145,23 @@ impl TableInfo {
         Ok(())
     }
 }
-pub(crate) fn cells(p: &[Prop<'_>]) -> Result<Vec<CellInfo>> {
+pub(crate) fn cells(p: &[Prop<'_>]) -> Result<(Vec<CellInfo>, Vec<[u32; 4]>)> {
     let n = count(number(p, 1).ok_or_else(|| bad("missing cell count"))?, MAX_CELLS)?;
     let Some(array) = p.iter().find(|p| p.key == 2 && p.kind == 0xa0) else { return Err(bad("missing cell list")) };
     let entries = array.children()?;
     if entries.len() != n {
         return Err(bad("cell count mismatch"));
     }
-    entries
-        .iter()
-        .map(|entry| {
-            let p = entry.children()?;
-            Ok(CellInfo {
-                row: number(&p, 1).unwrap_or(0) as usize,
-                last_row: number(&p, 2).unwrap_or(0) as usize,
-                col: number(&p, 3).unwrap_or(0) as usize,
-                last_col: number(&p, 4).unwrap_or(0) as usize,
-            })
-        })
-        .collect()
+    let mut cells = Vec::with_capacity(n);
+    let mut margins = Vec::with_capacity(n);
+    for entry in &entries {
+        let p = entry.children()?;
+        // Publisher leaves out a value that is 0.
+        let n = |key| number(&p, key).unwrap_or(0);
+        cells.push(CellInfo { row: n(1) as usize, last_row: n(2) as usize, col: n(3) as usize, last_col: n(4) as usize });
+        margins.push([n(0x0a), n(0x0b), n(0x0c), n(0x0d)]);
+    }
+    Ok((cells, margins))
 }
 pub(crate) fn text_ranges(data: &[u8], units: &[u16]) -> Result<Vec<Range<usize>>> {
     let n = count(u32_at(data, 0)?, MAX_CELLS - 1)? + 1;
@@ -470,7 +482,103 @@ impl Builder<'_> {
             stored
         ));
     }
-    pub(crate) fn table_frame(&mut self, r: SpreadRef, rect: Rect, tid: u32, info: &TableInfo) -> Result<ItemId> {
+    /// A table part's colour: its fill colour (Escher's default white), or none when its fill is off.
+    fn part_color(&mut self, sh: &EShape) -> Option<String> {
+        // fillStyle booleans: fFilled (bit 4) with its "use" bit (bit 20); Escher's default is on.
+        let filled = sh.prop(0x01bf).is_none_or(|v| v & 0x0010_0000 == 0 || v & 0x10 != 0);
+        filled.then(|| self.color(sh.prop(0x0181).unwrap_or(0x00ff_ffff))).flatten()
+    }
+
+    /// Paints the table's cells and edges from its parts (`tables.md`, "Cell fills and borders").
+    /// An edge is a run of grid segments; a cell side takes it when the run covers the whole side,
+    /// and the rendering resolves a stretch two cells share in favour of the visible copy.
+    fn paint_table(&mut self, table: &mut Table, info: &TableInfo, parts: &[EShape]) {
+        let (nr, nc) = (info.rows.len(), info.columns.len());
+        // Unit segments: horizontal ones on row line y at index y * nc + x, vertical ones on
+        // column line x at index x * nr + y.
+        let mut across: Vec<Option<CellStroke>> = vec![None; (nr + 1) * nc];
+        let mut down: Vec<Option<CellStroke>> = vec![None; (nc + 1) * nr];
+        let mut odd = 0usize;
+        for sh in parts {
+            let Some(part) = sh.table_part else { continue };
+            let paint = self.part_color(sh);
+            let ((r0, c0), (r1, c1)) = ((part.from.0 as usize, part.from.1 as usize), (part.to.0 as usize, part.to.1 as usize));
+            match part.role {
+                0 => match info.cells.get(part.cell as usize).and_then(|c| table.cell_mut(c.row, c.col)) {
+                    Some(cell) => cell.fill = paint.unwrap_or_else(|| designcraft_color::swatch::NONE.into()),
+                    None => odd += 1,
+                },
+                1 | 2 => {
+                    let weight = pt(f64::from(sh.prop(0x01cb).unwrap_or(DEFAULT_EDGE_EMU)));
+                    let stroke =
+                        paint.filter(|_| weight > 0.0).map_or_else(CellStroke::none, |color| CellStroke { weight, color, ..Default::default() });
+                    if part.role == 1 && r0 == r1 && r0 <= nr && c0 < c1 && c1 <= nc {
+                        across[r0 * nc + c0..r0 * nc + c1].fill(Some(stroke));
+                    } else if part.role == 2 && c0 == c1 && c0 <= nc && r0 < r1 && r1 <= nr {
+                        down[c0 * nr + r0..c0 * nr + r1].fill(Some(stroke));
+                    } else {
+                        odd += 1;
+                    }
+                }
+                _ => odd += 1,
+            }
+        }
+        // The side's stroke when the edges cover all of it: the heaviest of them.
+        fn covering(segments: &[Option<CellStroke>]) -> Option<CellStroke> {
+            let all: Option<Vec<&CellStroke>> = segments.iter().map(Option::as_ref).collect();
+            all?.into_iter().max_by(|a, b| a.weight.total_cmp(&b.weight)).cloned()
+        }
+        let owners = table.owners();
+        for (i, &(r, c)) in owners.iter().enumerate() {
+            if i != r * nc + c {
+                continue;
+            }
+            let Some(cell) = table.cell_mut(r, c) else { continue };
+            let (r1, c1) = ((r + cell.row_span.max(1) as usize).min(nr), (c + cell.col_span.max(1) as usize).min(nc));
+            let sides = [
+                across.get(r * nc + c..r * nc + c1),
+                down.get(c * nr + r..c * nr + r1),
+                across.get(r1 * nc + c..r1 * nc + c1),
+                down.get(c1 * nr + r..c1 * nr + r1),
+            ];
+            for (side, segments) in sides.into_iter().enumerate() {
+                if let Some(stroke) = segments.and_then(covering) {
+                    cell.strokes[side] = stroke;
+                }
+            }
+        }
+        // A visible segment neither neighbour's side carries (it covers part of a merged cell's side).
+        let visible = |owner: Option<&(usize, usize)>, side: usize| {
+            owner.and_then(|&(r, c)| table.cell(r, c)).is_some_and(|cell| cell.strokes[side].is_visible())
+        };
+        let mut lost = 0usize;
+        for (i, segment) in across.iter().enumerate() {
+            let (y, x) = (i / nc, i % nc);
+            if segment.as_ref().is_some_and(CellStroke::is_visible)
+                && !visible(y.checked_sub(1).and_then(|y| owners.get(y * nc + x)), 2)
+                && !visible(owners.get(y * nc + x).filter(|_| y < nr), 0)
+            {
+                lost += 1;
+            }
+        }
+        for (i, segment) in down.iter().enumerate() {
+            let (x, y) = (i / nr, i % nr);
+            if segment.as_ref().is_some_and(CellStroke::is_visible)
+                && !visible(x.checked_sub(1).and_then(|x| owners.get(y * nc + x)), 3)
+                && !visible(owners.get(y * nc + x).filter(|_| x < nc), 1)
+            {
+                lost += 1;
+            }
+        }
+        if lost > 0 {
+            self.warnings.push(format!("Publisher table border pieces along part of a merged cell's side were not drawn ({lost})."));
+        }
+        if odd > 0 {
+            self.warnings.push(format!("Publisher table cell fills or borders outside the table were skipped ({odd})."));
+        }
+    }
+
+    pub(crate) fn table_frame(&mut self, r: SpreadRef, rect: Rect, tid: u32, info: &TableInfo, seq: Option<u32>) -> Result<ItemId> {
         self.table_cells = self.table_cells.saturating_add(info.rows.len() * info.columns.len());
         self.table_units = self.table_units.saturating_add(self.q.stories.get(&tid).map_or(0, |s| s.units.len()));
         if self.table_cells > 100_000 || self.table_units > 16_000_000 {
@@ -540,6 +648,16 @@ impl Builder<'_> {
                 cell.text = cell_story(&source, a..z, &mut self.table_work)?;
             }
         }
+        // Publisher's cell margins (left, right, top, bottom); the cell's insets run top, left, bottom, right.
+        for (c, [l, r, t, b]) in info.cells.iter().zip(&info.margins) {
+            if let Some(cell) = table.cell_mut(c.row, c.col) {
+                cell.insets = [t, l, b, r].map(|v| pt(f64::from(*v)));
+            }
+        }
+        let dr = self.dr;
+        if let Some(parts) = seq.and_then(|s| dr.table_parts.get(&s)) {
+            self.paint_table(&mut table, info, parts);
+        }
         if repeated > 0 {
             self.warnings.push(format!(
                 "Publisher table lists {repeated} cell(s) twice, as for a cell split in two; both parts' text is in the one cell, one after the other, and the split is not drawn."
@@ -557,8 +675,7 @@ impl Builder<'_> {
         if !can_assign {
             self.warnings.push("Table cell-text association is unconfirmed or missing; the original text was retained after the table.".into());
         }
-        self.warnings
-            .push("Publisher table cell fills, borders, padding and other cell formatting are not decoded; unpainted cells were used.".into());
+        self.warnings.push("Publisher table cell text formatting other than margins (vertical alignment, text direction) is not decoded.".into());
         Ok(id)
     }
 }
@@ -576,6 +693,7 @@ mod tests {
         TableInfo {
             rows: vec![457_200; 2],
             columns: vec![1_828_800; 2],
+            margins: Vec::new(),
             cell_record: 260,
             row_ending_difference: 0,
             approximations: Vec::new(),
@@ -603,6 +721,16 @@ mod tests {
         import_framed(info, text, ranges, size, 72.0)
     }
     fn import_framed(info: TableInfo, text: &str, ranges: Option<Vec<Range<usize>>>, size: f64, frame_pt: f64) -> crate::Imported {
+        import_painted(info, text, ranges, size, frame_pt, Vec::new())
+    }
+    fn import_painted(
+        info: TableInfo,
+        text: &str,
+        ranges: Option<Vec<Range<usize>>>,
+        size: f64,
+        frame_pt: f64,
+        parts: Vec<EShape>,
+    ) -> crate::Imported {
         let mut c = Contents { width_emu: 7_772_400, height_emu: 10_058_400, ..Default::default() };
         c.pages.push(PageInfo { seq: 257, shapes: vec![258], ..Default::default() });
         c.shapes.insert(258, ShapeInfo { text_id: Some(3), is_table: true, table: Some(info), ..Default::default() });
@@ -619,11 +747,73 @@ mod tests {
                 anchor: Emu { l: -2_000_000.0, t: -2_000_000.0, r: 1_657_600.0, b: -2_000_000.0 + frame_pt * 12_700.0 },
                 ..Default::default()
             }],
+            table_parts: [(258, parts)].into(),
             ..Default::default()
         };
         let mut b = Builder::new(&c, &q, &dr).unwrap();
         b.build().unwrap();
         crate::Imported { document: b.doc, warnings: b.warnings, notes: Vec::new() }
+    }
+    fn part(role: u32, cell: u32, from: (u32, u32), to: (u32, u32), props: &[(u16, u32)]) -> EShape {
+        let table_part = Some(crate::escher::TablePart { table: 258, role, cell, from, to });
+        EShape { props: props.iter().copied().collect(), table_part, ..Default::default() }
+    }
+    #[test]
+    fn cell_fills_edges_and_margins_come_from_the_parts_and_the_cell_records() {
+        let mut info = grid();
+        // Left, right, top, bottom; zero values are left out of the record.
+        info.margins = vec![[18_415, 18_415, 0, 0], [36_576; 4], [36_576; 4], [36_576; 4]];
+        let parts = vec![
+            // The second cell record (row 0, column 1), green.
+            part(0, 1, (0, 0), (0, 0), &[(0x0181, 0x0050_d092)]),
+            // Row line 1 across both columns: black, 1.5 pt.
+            part(1, 0, (1, 0), (1, 2), &[(0x0181, 0), (0x01cb, 19_050)]),
+            // Column line 1 down the first row: red, no width (0.75 pt).
+            part(2, 0, (0, 1), (1, 1), &[(0x0181, 0x0000_00ff)]),
+            // Row line 0 with its fill off: no line.
+            part(1, 0, (0, 0), (0, 2), &[(0x0181, 0), (0x01bf, 0x0010_0000)]),
+        ];
+        let imp = import_painted(info, "a\rb\rc\rd", Some(vec![0..1, 2..3, 4..5, 6..7]), 0.0, 72.0, parts);
+        let table = imp.document.stories.values().next().unwrap().tables.values().next().unwrap();
+        let swatch = |name: &str| imp.document.swatches.iter().find(|s| s.name == name).map(|s| s.name.clone());
+        assert_eq!(Some(table.cell(0, 1).unwrap().fill.clone()), swatch("R=146 G=208 B=80"));
+        assert!(!table.cell(0, 0).unwrap().has_fill());
+        for (r, c, side) in [(0, 0, 2), (0, 1, 2), (1, 0, 0), (1, 1, 0)] {
+            let stroke = &table.cell(r, c).unwrap().strokes[side];
+            assert_eq!((stroke.weight, stroke.color.as_str()), (1.5, "R=0 G=0 B=0"), "cell {r},{c} side {side}");
+        }
+        let (left, right) = (&table.cell(0, 1).unwrap().strokes[1], &table.cell(0, 0).unwrap().strokes[3]);
+        assert_eq!((left.weight, right.weight, left.color.as_str()), (0.75, 0.75, "R=255 G=0 B=0"));
+        assert!(!table.cell(0, 0).unwrap().strokes[0].is_visible() && !table.cell(1, 1).unwrap().strokes[3].is_visible());
+        assert!(!table.cell(1, 0).unwrap().strokes[3].is_visible(), "column line 1 stops at row line 1");
+        let [t, l, b, r] = table.cell(0, 0).unwrap().insets;
+        assert!((l - 1.45).abs() < 0.01 && (r - 1.45).abs() < 0.01 && t == 0.0 && b == 0.0, "{:?}", table.cell(0, 0).unwrap().insets);
+        assert!(imp.warnings.iter().all(|w| !w.contains("border") && !w.contains("were skipped")), "{:?}", imp.warnings);
+    }
+    #[test]
+    fn an_edge_along_part_of_a_merged_side_or_off_the_grid_is_reported() {
+        let mut info = grid();
+        // The first column is one cell two rows tall.
+        info.cells = vec![
+            CellInfo { row: 0, last_row: 1, col: 0, last_col: 0 },
+            CellInfo { row: 0, last_row: 0, col: 1, last_col: 1 },
+            CellInfo { row: 1, last_row: 1, col: 1, last_col: 1 },
+        ];
+        let parts = vec![
+            // Column line 1, first row only: the right column's top cell carries it.
+            part(2, 0, (0, 1), (1, 1), &[(0x0181, 0)]),
+            // Column line 0, first row only: half of the merged cell's left side, so it is lost.
+            part(2, 0, (0, 0), (1, 0), &[(0x0181, 0)]),
+            // Off the grid, and a cell that isn't listed.
+            part(1, 0, (3, 0), (3, 1), &[(0x0181, 0)]),
+            part(0, 9, (0, 0), (0, 0), &[(0x0181, 0)]),
+        ];
+        let imp = import_painted(info, "a\rb\rc", Some(vec![0..1, 2..3, 4..5]), 0.0, 72.0, parts);
+        let table = imp.document.stories.values().next().unwrap().tables.values().next().unwrap();
+        assert!(table.cell(0, 1).unwrap().strokes[1].is_visible());
+        assert!(!table.cell(0, 0).unwrap().strokes[1].is_visible());
+        assert!(imp.warnings.iter().any(|w| w.contains("merged cell's side were not drawn (1)")), "{:?}", imp.warnings);
+        assert!(imp.warnings.iter().any(|w| w.contains("outside the table were skipped (2)")), "{:?}", imp.warnings);
     }
     fn dimension_properties(ends: &[u32], sizes: &[u32], width: u32, height: u32) -> Vec<u8> {
         fn number(key: u8, value: u32) -> Vec<u8> {
@@ -719,7 +909,7 @@ mod tests {
         }
     }
     #[test]
-    fn imports_native_grid_text_formatting_and_warns_for_unconfirmed_cell_paint() {
+    fn imports_native_grid_text_formatting_unpainted_when_the_drawing_has_no_parts() {
         let text = "A1\rB1\rA2\rB2\r";
         let units: Vec<_> = text.encode_utf16().collect();
         let ranges = text_ranges(&table_data(&[2, 5, 8, 12]), &units).unwrap();
@@ -741,7 +931,7 @@ mod tests {
             assert_eq!(cell.text.char_format_at(0).over.font_style.as_deref(), Some("Bold"));
         }
         assert!(!t.options.border.is_visible());
-        assert!(imp.warnings.iter().any(|w| w.contains("cell fills, borders")));
+        assert!(imp.warnings.iter().any(|w| w.contains("other than margins")));
     }
     #[test]
     fn a_table_taller_than_its_frame_grows_the_frame_instead_of_dropping_the_last_row() {
@@ -751,6 +941,7 @@ mod tests {
         let info = TableInfo {
             rows: vec![228_600; rows],
             columns: vec![1_828_800; 2],
+            margins: Vec::new(),
             cells: (0..rows * 2).map(|i| CellInfo { row: i / 2, last_row: i / 2, col: i % 2, last_col: i % 2 }).collect(),
             cell_record: 0,
             row_ending_difference: 0,
@@ -782,6 +973,7 @@ mod tests {
         let info = TableInfo {
             rows: vec![228_600; rows],
             columns: vec![1_828_800; 2],
+            margins: Vec::new(),
             cells: (0..rows * 2).map(|i| CellInfo { row: i / 2, last_row: i / 2, col: i % 2, last_col: i % 2 }).collect(),
             cell_record: 0,
             row_ending_difference: 0,
@@ -943,6 +1135,7 @@ mod multi_story_text_tests {
                 table: Some(TableInfo {
                     rows: vec![457200],
                     columns: vec![1828800; 2],
+                    margins: Vec::new(),
                     cells: (0..2).map(|col| CellInfo { row: 0, last_row: 0, col, last_col: col }).collect(),
                     cell_record: 0,
                     row_ending_difference: 0,

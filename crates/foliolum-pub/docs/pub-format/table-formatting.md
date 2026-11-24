@@ -1,5 +1,10 @@
 # Table formatting observations
 
+> **Since resolved (issue #39):** cell fills and borders turned out to be Escher shapes of
+> their own that name the table, absent from every table below; cell keys 0x0A–0x0D are the cell
+> margins. See `tables.md`, "Cell fills and borders" and "Cell margins". The notes below are the
+> earlier record and are kept as they were.
+
 ## Scope and baseline
 
 OBSERVATION: notes from main `104ad73`, using only the pinned 142 controlled binaries and 24 Apache binaries, the existing container, Escher and Quill readers, and retained format notes. All 317 recorded sizes and SHA-256 values match: 166 binaries, 142 scoring JSON files and nine reference PNGs. Scoring data supplies no storage interpretation. Data remains outside the checkout in `/tmp/niftydata`.

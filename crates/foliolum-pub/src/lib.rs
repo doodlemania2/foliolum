@@ -26,7 +26,7 @@
 //! score imports, never to infer format encoding.
 //!
 //! ## Not supported yet
-//! Table cell fills, borders and unconfirmed cell formatting; non-default WordArt warps and exact
+//! Table cell vertical alignment and border dash styles; non-default WordArt warps and exact
 //! stretching (default upward arch uses measured editable path text; other warps stay straight),
 //! pattern/texture fills (approximated by the fill colour), picture crops
 //! other than rectangular, PICT pictures (an empty graphic frame keeps their place), custom tab stops,
@@ -438,7 +438,7 @@ impl<'a> Builder<'a> {
         let follower = text_id.is_some_and(|t| self.chains.contains_key(&t));
         let id = if let Some(tid) = text_id.filter(|_| !follower) {
             if let Some(table) = &info.table {
-                self.table_frame(r, rect, tid, table)?
+                self.table_frame(r, rect, tid, table, sh.seq)?
             } else {
                 if info.is_table {
                     self.warnings.push("Unsupported Publisher table geometry was retained as text.".into());
