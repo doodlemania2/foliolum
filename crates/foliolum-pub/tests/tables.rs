@@ -28,7 +28,7 @@ fn observed_table_fixtures_import_as_native_tables() {
         } else {
             assert!(t.cells.iter().all(|c| c.text.text.is_empty()));
         }
-        assert!(imp.warnings.iter().any(|w| w.contains("cell fills, borders")));
+        assert!(imp.warnings.iter().any(|w| w.contains("other than margins")));
         assert!(imp.warnings.iter().all(|w| !w.contains("stored endings for row positions")), "{name}");
         assert!((t.rows.iter().map(|r| r.height).sum::<f64>() - rows as f64 * 36.0).abs() < 1e-9);
         for c in &t.cells {

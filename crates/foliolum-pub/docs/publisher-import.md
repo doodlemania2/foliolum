@@ -33,14 +33,15 @@ Every open returns:
   pictures as vector SVG.
 - WordArt as editable text with its font, style, alignment and letter fill and line. The default
   upward arch follows its curved path; other warps come over straight.
-- Tables with their row and column sizes, merged cells and cell text.
+- Tables with their row and column sizes, merged cells, cell text, cell fills, cell borders
+  (colour and width) and cell margins.
 - BorderArt: the picture borders around frames, drawn from their pieces as one picture (in the
   pieces' own colours; Publisher's recolouring is not read).
 
 ## What does not (each reported as a warning or a note)
 
 - Publisher 97, 98 and 2000 files: refused with a message to re-save in Publisher 2002 or later.
-- Table cell fills, borders and padding; WordArt warps other than the default arch, and exact
+- Table cell vertical alignment and dash styles of cell borders; WordArt warps other than the default arch, and exact
   letter stretching; pattern and texture fills (approximated by the fill colour); picture fills;
   crops other than rectangular; PICT pictures (an empty graphic frame keeps their place); text,
   bitmaps, arcs and pattern fills inside WMF/EMF pictures; custom tab stops; numbering; fields such

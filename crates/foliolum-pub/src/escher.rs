@@ -5,7 +5,9 @@
 //! Publisher's own variants: each DggContainer/DgContainer is followed by a u32, and the
 //! client anchor/data records hold a duplicated u32 length then (u16 id, u32 value) pairs —
 //! the anchor's are page-centre-relative EMU (`0x2001..0x2004`), the data's `0x6801` is the
-//! shape's `Contents` sequence number.
+//! shape's `Contents` sequence number. A table's cell fills and borders are shapes of their own
+//! whose anchor names the table (`0x6802`) and a cell or grid edge instead; they are kept apart
+//! in [`Drawing::table_parts`].
 
 use std::collections::HashMap;
 
@@ -13,6 +15,7 @@ use crate::read::{i32_at, slice, u16_at, u32_at};
 use crate::{PubError, Result};
 
 const DGG: u16 = 0xF000;
+const MAX_TABLE_PARTS: usize = 100_000;
 const BSTORE: u16 = 0xF001;
 const DG: u16 = 0xF002;
 const SPGR: u16 = 0xF003;
@@ -83,6 +86,21 @@ pub(crate) struct EShape {
     /// Members of a group, already in page coordinates.
     pub children: Vec<EShape>,
     pub is_group: bool,
+    /// A Publisher table's cell or cell edge (`tables.md`, "Cell fills and borders").
+    pub table_part: Option<TablePart>,
+}
+
+/// A table part's client anchor: `0x6802` is the table's `Contents` sequence number, `0x2001` the
+/// part's role (0 a cell, 1 a horizontal edge, 2 a vertical edge), `0x2003` a cell's position in the
+/// table's cell list, and `0x2004..=0x2007` an edge's start and end grid points (row, column). An
+/// absent value is 0.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct TablePart {
+    pub table: u32,
+    pub role: u32,
+    pub cell: u32,
+    pub from: (u32, u32),
+    pub to: (u32, u32),
 }
 
 impl EShape {
@@ -97,6 +115,8 @@ pub(crate) struct Drawing {
     pub shapes: Vec<EShape>,
     /// Pictures by picture id (1-based `pib`).
     pub pictures: HashMap<u32, Picture>,
+    /// Table parts (cells and cell edges) by their table's `Contents` sequence number, in stacking order.
+    pub table_parts: HashMap<u32, Vec<EShape>>,
     pub warnings: Vec<String>,
 }
 
@@ -176,6 +196,12 @@ fn shape(b: &[u8], sp: Rec) -> Result<(EShape, Option<Emu>)> {
             FOPT | TERTIARY_FOPT => props(b, r, &mut sh)?,
             CLIENT_ANCHOR => {
                 let m = pairs(b, r)?;
+                if let Some(table) = m.get(&0x6802) {
+                    let n = |k| m.get(&k).copied().unwrap_or(0);
+                    sh.table_part =
+                        Some(TablePart { table: *table, role: n(0x2001), cell: n(0x2003), from: (n(0x2004), n(0x2005)), to: (n(0x2006), n(0x2007)) });
+                    continue;
+                }
                 let v = |k| m.get(&k).map_or(0.0, |v| f64::from(*v as i32));
                 sh.anchor = Emu { l: v(0x2001), t: v(0x2002), r: v(0x2003), b: v(0x2004) };
             }
@@ -251,6 +277,7 @@ pub(crate) fn parse(stm: &[u8], delay: &[u8]) -> Result<Drawing> {
 
 fn parse_with_picture_budget(stm: &[u8], delay: &[u8], mut picture_bytes: usize) -> Result<Drawing> {
     let mut d = Drawing::default();
+    let mut parts = 0usize;
     for top in records(stm, 0, stm.len())? {
         match top.ty {
             DGG => {
@@ -284,7 +311,18 @@ fn parse_with_picture_budget(stm: &[u8], delay: &[u8], mut picture_bytes: usize)
                     for (i, x) in recs.iter().enumerate() {
                         match x.ty {
                             SP if i == 0 => {}
-                            SP => d.shapes.push(shape(stm, *x)?.0),
+                            SP => {
+                                let sh = shape(stm, *x)?.0;
+                                if let Some(part) = sh.table_part {
+                                    parts += 1;
+                                    if parts > MAX_TABLE_PARTS {
+                                        return Err(PubError::Malformed("too many table parts".into()));
+                                    }
+                                    d.table_parts.entry(part.table).or_default().push(sh);
+                                } else {
+                                    d.shapes.push(sh);
+                                }
+                            }
                             SPGR => {
                                 if let Some(g) = group(stm, *x, 1, &mut d.warnings)? {
                                     d.shapes.push(g);
@@ -396,5 +434,37 @@ mod tests {
         let v = sh.prop(0x01ff).unwrap();
         assert_eq!(v & 0x0008_0008, 0x0008_0000, "line flag lost: {v:#x}");
         assert_ne!(v & 0x0040_0000, 0);
+    }
+
+    #[test]
+    fn table_parts_are_kept_apart_from_the_page_shapes() {
+        let pairs = |ps: &[(u16, u32)]| -> Vec<u8> {
+            let body: Vec<u8> = ps.iter().flat_map(|(k, v)| [k.to_le_bytes().to_vec(), v.to_le_bytes().to_vec()].concat()).collect();
+            [(body.len() as u32).to_le_bytes().to_vec(), body].concat()
+        };
+        let edge = rec(
+            0,
+            0xf,
+            SP,
+            &[
+                rec(1, 3, FOPT, &prop(0x01cb, 19_050)),
+                rec(0, 0, CLIENT_ANCHOR, &pairs(&[(0x2001, 1), (0x2004, 4), (0x2006, 4), (0x2007, 2), (0x6802, 311)])),
+            ]
+            .concat(),
+        );
+        let shape = rec(
+            0,
+            0xf,
+            SP,
+            &[rec(0, 0, CLIENT_ANCHOR, &pairs(&[(0x2001, 10), (0x2003, 20)])), rec(0, 0, CLIENT_DATA, &pairs(&[(0x6801, 299)]))].concat(),
+        );
+        let patriarch = rec(0, 0xf, SP, &[]);
+        let stm = rec(0, 0xf, DG, &rec(0, 0xf, SPGR, &[patriarch, edge, shape].concat()));
+        let d = parse(&stm, &[]).unwrap();
+        assert_eq!(d.shapes.len(), 1);
+        assert_eq!(d.shapes[0].seq, Some(299));
+        let parts = &d.table_parts[&311];
+        assert_eq!(parts[0].table_part, Some(TablePart { table: 311, role: 1, cell: 0, from: (4, 0), to: (4, 2) }));
+        assert_eq!(parts[0].prop(0x01cb), Some(19_050));
     }
 }
