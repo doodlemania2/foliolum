@@ -55,6 +55,14 @@ document's pages and draws its thumbnails from it, so no page is rendered twice 
 panel's do. The cache and its refresh timing are private to the panel. Drop it if upstream makes page
 thumbnails public.
 
+### 0005-textimport-zip-dev-only
+
+`crates/textimport/Cargo.toml`: drops `zip` from `[dependencies]`, leaving it in `[dev-dependencies]`.
+The crate's code reads archives through `craft-zip` (zip 9); only its tests build archives with `zip`
+directly, as in every other DesignCraft crate. Declaring it as a normal dependency put the workspace's
+zip 3.0.0 into our `Cargo.lock`, which carries three security advisories fixed in zip 9 (#41). Nothing
+else changes. Drop it once upstream makes the same move or raises the workspace `zip` to 9.
+
 ## Upstream test baseline
 
 At pin `47ef1ec` these DesignCraft UI tests already fail on macOS without any of our patches (`cargo test
