@@ -1,0 +1,185 @@
+diff --git a/crates/ui-egui/src/about.rs b/crates/ui-egui/src/about.rs
+index 7efae47f..8c51c0d0 100644
+--- a/crates/ui-egui/src/about.rs
++++ b/crates/ui-egui/src/about.rs
+@@ -66,6 +66,49 @@ pub fn paint_mark(ui: &egui::Ui, rect: Rect, color: Color32) {
+     ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+ }
+ 
++/// Paint the app's own mark ([`crate::brand::Brand::mark`]) into `rect` (square), rasterised once per
++/// size and cached. Draws nothing when the brand has none.
++pub fn paint_brand_mark(ui: &egui::Ui, rect: Rect) {
++    use designcraft_render::vello_cpu::{self, kurbo, peniko};
++    let brand = crate::brand::get();
++    if brand.mark.is_empty() || brand.mark_view <= 0.0 {
++        return;
++    }
++    let ctx = ui.ctx();
++    let ppp = ctx.pixels_per_point();
++    let px = ((rect.width().min(rect.height()) * ppp).round() as u32).clamp(8, 1024);
++    let key = egui::Id::new(("brand_mark", px));
++    let tex: Option<egui::TextureHandle> = ctx.data(|d| d.get_temp(key));
++    let tex = tex.unwrap_or_else(|| {
++        let mut rc = vello_cpu::RenderContext::new_with(px as u16, px as u16, vello_cpu::RenderSettings { num_threads: 0, ..Default::default() });
++        rc.set_transform(kurbo::Affine::scale(px as f64 / brand.mark_view));
++        let color = |c: u32| peniko::Color::from_rgba8((c >> 16) as u8, (c >> 8) as u8, c as u8, 255);
++        for shape in brand.mark {
++            let Ok(p) = kurbo::BezPath::from_svg(shape.path) else { continue };
++            if let Some(fill) = shape.fill {
++                rc.set_paint(color(fill));
++                rc.fill_path(&p);
++            }
++            if let Some((stroke, width)) = shape.stroke {
++                rc.set_paint(color(stroke));
++                rc.set_stroke(kurbo::Stroke::new(width).with_join(kurbo::Join::Round).with_caps(kurbo::Cap::Round));
++                rc.stroke_path(&p);
++            }
++        }
++        rc.flush();
++        let mut pm = vello_cpu::Pixmap::new(px as u16, px as u16);
++        let mut res = vello_cpu::Resources::new();
++        rc.render(&mut pm, &mut res);
++        let ci = egui::ColorImage::from_rgba_premultiplied([px as usize, px as usize], pm.data_as_u8_slice());
++        let t = crate::widgets::load_texture(ctx, "brand_mark", ci, egui::TextureOptions::LINEAR);
++        ctx.data_mut(|d| d.insert_temp(key, t.clone()));
++        t
++    });
++    let side = rect.width().min(rect.height());
++    let r = Rect::from_center_size(rect.center(), vec2(side, side));
++    ui.painter().image(tex.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
++}
++
+ /// A speech-bubble glyph (drawn in code) for Discord buttons.
+ pub fn paint_chat_icon(p: &egui::Painter, c: egui::Pos2, s: f32, color: Color32) {
+     let body = Rect::from_center_size(c - vec2(0.0, s * 0.06), vec2(s, s * 0.72));
+@@ -119,6 +162,11 @@ fn embedder_about(app: &mut DesignApp, ui: &mut egui::Ui, t: &Tokens) {
+     let brand = crate::brand::get();
+     ui.vertical_centered(|ui| {
+         ui.add_space(8.0);
++        if !brand.mark.is_empty() {
++            let (r, _) = ui.allocate_exact_size(vec2(72.0, 72.0), Sense::hover());
++            paint_brand_mark(ui, r);
++            ui.add_space(6.0);
++        }
+         ui.label(crate::rtl::widget(ui, egui::RichText::new(brand.name).font(semibold(26.0)).color(t.text_strong)));
+         crate::rtl::label(
+             ui,
+diff --git a/crates/ui-egui/src/brand.rs b/crates/ui-egui/src/brand.rs
+index df440c49..3ca36df5 100644
+--- a/crates/ui-egui/src/brand.rs
++++ b/crates/ui-egui/src/brand.rs
+@@ -23,6 +23,37 @@ pub struct Brand {
+     pub credit: Option<&'static str>,
+     /// The app's own links for About when `artcraft` is off: (label, URL).
+     pub links: &'static [(&'static str, &'static str)],
++    /// The app's mark for the start screen and About when `artcraft` is off: shapes drawn in order in a
++    /// square `mark_view` units on a side. Empty for none.
++    pub mark: &'static [MarkShape],
++    /// The side of the mark's square view box.
++    pub mark_view: f64,
++    /// The app's accent colours in place of DesignCraft's blue (not in High Contrast).
++    pub accent: Option<Accent>,
++}
++
++/// One shape of a brand mark: an SVG path, filled and/or stroked (colours as 0xRRGGBB).
++#[derive(Clone, Copy, Debug)]
++pub struct MarkShape {
++    pub path: &'static str,
++    pub fill: Option<u32>,
++    /// Colour and width (in view-box units); round joins and caps.
++    pub stroke: Option<(u32, f64)>,
++}
++
++/// Accent colours (0xRRGGBB) for dark and light interface brightness: links and highlights (`accent`),
++/// filled buttons and text selection (`strong`, with white text on it) and selected rows (`row`).
++#[derive(Clone, Copy, Debug)]
++pub struct Accent {
++    pub dark: AccentSet,
++    pub light: AccentSet,
++}
++
++#[derive(Clone, Copy, Debug)]
++pub struct AccentSet {
++    pub accent: u32,
++    pub strong: u32,
++    pub row: u32,
+ }
+ 
+ /// DesignCraft's own brand.
+@@ -33,6 +64,9 @@ pub const DESIGNCRAFT: Brand = Brand {
+     artcraft: true,
+     credit: None,
+     links: &[],
++    mark: &[],
++    mark_view: 1.0,
++    accent: None,
+ };
+ 
+ /// The commands that open ArtCraft or DesignCraft project pages; hidden when `artcraft` is off.
+@@ -73,4 +107,16 @@ mod tests {
+         }
+         assert!(shows_under(&other, "help.about") && shows_under(&other, "file.newSample"));
+     }
++
++    #[test]
++    fn an_accent_replaces_designcrafts_blue_and_nothing_else() {
++        use crate::theme::{Brightness, Tokens};
++        let base = Tokens::for_brightness(Brightness::Light);
++        let t = base.with_accent(AccentSet { accent: 0xb3322a, strong: 0x8e241e, row: 0xf1d2ce });
++        assert_eq!(t.accent, egui::Color32::from_rgb(0xb3, 0x32, 0x2a));
++        assert_eq!(t.accent_strong, egui::Color32::from_rgb(0x8e, 0x24, 0x1e));
++        assert_eq!(t.row_selected, egui::Color32::from_rgb(0xf1, 0xd2, 0xce));
++        assert_ne!(base.accent_strong, t.accent_strong, "DesignCraft's own brand keeps its blue");
++        assert_eq!((t.panel, t.text), (base.panel, base.text));
++    }
+ }
+diff --git a/crates/ui-egui/src/chrome/start_screen.rs b/crates/ui-egui/src/chrome/start_screen.rs
+index adb59d82..5aca131d 100644
+--- a/crates/ui-egui/src/chrome/start_screen.rs
++++ b/crates/ui-egui/src/chrome/start_screen.rs
+@@ -12,7 +12,17 @@ pub fn start_screen(app: &mut DesignApp, ui: &mut egui::Ui) {
+         })),
+         |ui| {
+             egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+-                ui.label(crate::rtl::widget(ui, egui::RichText::new(welcome(&app.ui.language)).font(semibold(28.0)).color(t.text_strong)));
++                if crate::brand::get().artcraft || crate::brand::get().mark.is_empty() {
++                    ui.label(crate::rtl::widget(ui, egui::RichText::new(welcome(&app.ui.language)).font(semibold(28.0)).color(t.text_strong)));
++                } else {
++                    // Another brand's mark beside its welcome.
++                    ui.horizontal(|ui| {
++                        let (r, _) = ui.allocate_exact_size(vec2(40.0, 40.0), Sense::hover());
++                        crate::about::paint_brand_mark(ui, r);
++                        ui.add_space(6.0);
++                        ui.label(crate::rtl::widget(ui, egui::RichText::new(welcome(&app.ui.language)).font(semibold(28.0)).color(t.text_strong)));
++                    });
++                }
+                 ui.label(crate::rtl::widget(
+                     ui,
+                     egui::RichText::new(crate::i18n::tr(&app.ui.language, crate::brand::get().tagline)).size(15.0).color(t.text_dim),
+diff --git a/crates/ui-egui/src/theme.rs b/crates/ui-egui/src/theme.rs
+index 8efa2e42..95c711b9 100644
+--- a/crates/ui-egui/src/theme.rs
++++ b/crates/ui-egui/src/theme.rs
+@@ -99,7 +99,22 @@ fn hex(s: u32) -> Color32 {
+ }
+ 
+ impl Tokens {
++    /// The tokens for brightness `b`, with the app's accent ([`crate::brand::Brand::accent`]) when it
++    /// sets one, except in High Contrast.
+     pub fn for_brightness(b: Brightness) -> Self {
++        let t = Self::designcraft(b);
++        match crate::brand::get().accent {
++            Some(a) if b != Brightness::HighContrast => t.with_accent(if t.dark { a.dark } else { a.light }),
++            _ => t,
++        }
++    }
++
++    /// `self` with accent colours `a`.
++    pub fn with_accent(self, a: crate::brand::AccentSet) -> Self {
++        Tokens { accent: hex(a.accent), accent_strong: hex(a.strong), row_selected: hex(a.row), ..self }
++    }
++
++    fn designcraft(b: Brightness) -> Self {
+         let dark = Tokens {
+             dark: true,
+             app_bar: hex(0x262626),

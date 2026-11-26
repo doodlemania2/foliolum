@@ -38,6 +38,39 @@ const BRAND: designcraft_ui_egui::brand::Brand = designcraft_ui_egui::brand::Bra
     artcraft: false,
     credit: Some("Based on DesignCraft by the ArtCraft team. Not affiliated with Microsoft."),
     links: &[("Source code", "https://github.com/doodlemania2/foliolum"), ("Report a problem", "https://github.com/doodlemania2/foliolum/issues")],
+    mark: QUILL,
+    mark_view: 64.0,
+    accent: Some(ACCENT),
+};
+
+/// Foliolum's mark, the quill of `favicon.svg`: a rubric leaf and a paper leaf on a paper tile.
+const QUILL: &[designcraft_ui_egui::brand::MarkShape] = {
+    use designcraft_ui_egui::brand::MarkShape;
+    &[
+        MarkShape {
+            path: "M12 0H52C58.63 0 64 5.37 64 12V52C64 58.63 58.63 64 52 64H12C5.37 64 0 58.63 0 52V12C0 5.37 5.37 0 12 0Z",
+            fill: Some(PAPER),
+            stroke: None,
+        },
+        MarkShape { path: "M14 50C14 29 29 14 50 14Z", fill: Some(RUBRIC), stroke: None },
+        MarkShape { path: "M14 50L50 14C50 35 35 50 14 50Z", fill: Some(PAPER), stroke: Some((INK, 3.0)) },
+        MarkShape { path: "M14 50L8 56", fill: None, stroke: Some((INK, 4.0)) },
+    ]
+};
+
+/// The brand colours (foliolum-site's style.css): paper, ink and rubric.
+const PAPER: u32 = 0xfbf8f2;
+const INK: u32 = 0x1f2430;
+const RUBRIC: u32 = 0xb3322a;
+
+/// Rubric in place of DesignCraft's blue. On dark chrome links take the site's dark-mode rubric
+/// (#e58a82) and filled buttons the rubric itself, which keeps white text at 6:1.
+const ACCENT: designcraft_ui_egui::brand::Accent = {
+    use designcraft_ui_egui::brand::{Accent, AccentSet};
+    Accent {
+        dark: AccentSet { accent: 0xe58a82, strong: RUBRIC, row: 0x7a3631 },
+        light: AccentSet { accent: RUBRIC, strong: 0x8e241e, row: 0xf1d2ce },
+    }
 };
 
 /// A new editing session with Foliolum's defaults.
