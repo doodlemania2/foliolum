@@ -25,6 +25,14 @@
 //! our own writer, with a reference beside each in the layout-export shape, for `gate` to check.
 //! They test robustness, not fidelity to Publisher, and don't count toward the Phase 1 gate.
 //!
+//!   cargo xtask review [--out DIR] [--verdicts FILE] [--refs DIR]... SET...
+//!
+//! `review` builds target/gate/review.html (review.rs) from what `gate` left for each SET: every file
+//! that exported, its page renders beside any Publisher reference (`<label>.ref-*` in each --refs DIR,
+//! default fixtures/lobz-refs), with buttons for the reviewer's verdict. It saves a complete
+//! verdicts.json to put in gate/. The page only works on this machine and is never published.
+//!   --out DIR       the gate's output folder (default target/gate)
+//!
 //!   cargo xtask favicon
 //!
 //! `favicon` renders apps/foliolum-web/favicon.svg into favicon.ico beside it (favicon.rs). Run it
@@ -34,6 +42,7 @@
 mod favicon;
 mod gate;
 mod pubwork;
+mod review;
 mod synth;
 mod truth;
 
@@ -57,6 +66,13 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+        Some("review") => match run_review(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("xtask review: {e}");
+                ExitCode::from(1)
+            }
+        },
         Some("favicon") => {
             let web = Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps/foliolum-web");
             match favicon::write(&web.join("favicon.svg"), &web.join("favicon.ico")) {
@@ -72,7 +88,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH...\n       cargo xtask synth [--count N] [--seed S] OUT\n       cargo xtask favicon"
+                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH...\n       cargo xtask synth [--count N] [--seed S] OUT\n       cargo xtask review [--out DIR] [--verdicts FILE] [--refs DIR]... SET...\n       cargo xtask favicon"
             );
             ExitCode::from(1)
         }
@@ -85,6 +101,28 @@ fn run_synth(mut args: pico_args::Arguments) -> Result<(), String> {
     let out: PathBuf = args.free_from_str().map_err(|_| "give the folder to write the set to".to_string())?;
     synth::write_set(&out, count, seed)?;
     println!("{count} synthetic publications (seed {seed}) and their references in {}", out.display());
+    Ok(())
+}
+
+fn run_review(mut args: pico_args::Arguments) -> Result<(), String> {
+    let root = root();
+    let out: PathBuf = args.opt_value_from_str("--out").map_err(|e| e.to_string())?.unwrap_or_else(|| root.join("target/gate"));
+    let verdicts_path: PathBuf = args.opt_value_from_str("--verdicts").map_err(|e| e.to_string())?.unwrap_or_else(|| root.join("gate/verdicts.json"));
+    let mut refs: Vec<PathBuf> = args.values_from_str("--refs").map_err(|e| e.to_string())?;
+    if refs.is_empty() {
+        refs.push(root.join("fixtures/lobz-refs"));
+    }
+    let sets: Vec<String> = args.finish().into_iter().map(|s| s.to_string_lossy().into_owned()).collect();
+    if sets.is_empty() {
+        return Err("name at least one set the gate has run, e.g. `cargo xtask review dev22 lobz`".into());
+    }
+    let verdicts = match std::fs::read_to_string(&verdicts_path) {
+        Ok(t) => serde_json::from_str(&t).map_err(|e| format!("{}: {e}", verdicts_path.display()))?,
+        Err(_) => serde_json::json!({}),
+    };
+    let (page, n) = review::write(&out, &sets, &refs, &verdicts)?;
+    println!("{n} files to review: open {}", page.display());
+    println!("then save verdicts.json from the page over {} and run the gate again", verdicts_path.display());
     Ok(())
 }
 

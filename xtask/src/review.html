@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gate review</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --ink: #1d1d1b; --muted: #6b6a66; --line: #dcdad4;
+  --accent: #2f5d8a; --ok: #2e7d4f; --bad: #b3412f; --pending: #a6a49d; --paper: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1b1a; --panel: #252523; --ink: #ecebe6; --muted: #a3a19a; --line: #3a3936;
+    --accent: #7fb0e0; --ok: #6cc48e; --bad: #ef8a76; --pending: #6f6d67; --paper: #ffffff;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  display: grid; grid-template-columns: 290px 1fr; }
+aside { border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
+aside header { padding: 14px 16px 10px; border-bottom: 1px solid var(--line); }
+aside h1 { font-size: 15px; margin: 0 0 6px; }
+.progress { color: var(--muted); font-size: 13px; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; margin: 8px 0 10px; overflow: hidden; }
+.bar > i { display: block; height: 100%; background: var(--ok); width: 0; }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; }
+button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 6px;
+  padding: 5px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+ul { list-style: none; margin: 0; padding: 6px 0; overflow: auto; flex: 1; }
+li { padding: 6px 16px; cursor: pointer; display: flex; gap: 8px; align-items: center; }
+li:hover { background: var(--bg); }
+li.on { background: var(--bg); box-shadow: inset 3px 0 var(--accent); }
+li .set { color: var(--muted); font-size: 12px; margin-left: auto; }
+.dot { width: 9px; height: 9px; border-radius: 50%; background: var(--pending); flex: none; }
+.dot.recognizable { background: var(--ok); }
+.dot.not-recognizable { background: var(--bad); }
+main { overflow: auto; min-width: 0; }
+.head { position: sticky; top: 0; background: var(--bg); border-bottom: 1px solid var(--line); padding: 12px 20px; z-index: 1; }
+.head h2 { margin: 0; font-size: 17px; }
+.meta { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
+.verdict { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.verdict button.chosen.recognizable { background: var(--ok); border-color: var(--ok); color: #fff; }
+.verdict button.chosen.not-recognizable { background: var(--bad); border-color: var(--bad); color: #fff; }
+textarea { font: inherit; flex: 1; min-width: 220px; min-height: 34px; height: 34px; resize: vertical; border: 1px solid var(--line);
+  border-radius: 6px; background: var(--panel); color: var(--ink); padding: 6px 8px; }
+.keys { color: var(--muted); font-size: 12px; margin-top: 6px; }
+details { margin-top: 8px; font-size: 13px; }
+details li { display: list-item; cursor: default; padding: 1px 0; }
+details ul { list-style: disc; padding-left: 20px; overflow: visible; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 16px 20px 40px; }
+.cols.single { grid-template-columns: minmax(0, 900px); }
+.col h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
+.page { background: var(--paper); border: 1px solid var(--line); margin-bottom: 14px; }
+.page img { display: block; width: 100%; height: auto; }
+.cap { font-size: 12px; color: var(--muted); margin: -10px 0 14px; }
+iframe.pdf { width: 100%; height: 85vh; border: 1px solid var(--line); background: #fff; }
+.none { color: var(--muted); border: 1px dashed var(--line); border-radius: 6px; padding: 14px; }
+@media (max-width: 760px) {
+  body { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; }
+  .cols { grid-template-columns: 1fr; padding: 12px 16px; }
+  .head { padding: 10px 16px; }
+}
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <h1>Gate review</h1>
+    <div class="progress" id="progress"></div>
+    <div class="bar"><i id="bar"></i></div>
+    <div class="tools">
+      <button class="primary" id="save" title="Download verdicts.json with every verdict, old and new">Save verdicts.json</button>
+      <button id="filter"></button>
+    </div>
+  </header>
+  <ul id="list"></ul>
+</aside>
+<main id="main"></main>
+<script>
+const DATA = /*DATA*/null;
+const KEY = "foliolum-gate-review";
+const files = DATA.files;
+// Verdicts: the committed ones, then anything given here (kept in this browser until saved).
+let local = {};
+try { local = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { local = {}; }
+function persist() { try { localStorage.setItem(KEY, JSON.stringify(local)); } catch (e) {} }
+function verdictOf(f) { return local[f.sha256] !== undefined ? local[f.sha256] : (DATA.verdicts || {})[f.sha256] || null; }
+let pendingOnly = false;
+let current = 0;
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function visible() { return files.map((f, i) => i).filter((i) => !pendingOnly || !verdictOf(files[i]) || i === current); }
+
+function renderList() {
+  const done = files.filter((f) => verdictOf(f)).length;
+  $("progress").textContent = `${done} of ${files.length} reviewed`;
+  $("bar").style.width = files.length ? `${(100 * done) / files.length}%` : "0";
+  $("filter").textContent = pendingOnly ? "Show all" : "Only unreviewed";
+  $("list").innerHTML = visible().map((i) => {
+    const f = files[i], v = verdictOf(f);
+    return `<li data-i="${i}" class="${i === current ? "on" : ""}"><span class="dot ${v ? v.verdict : ""}"></span>${esc(f.label)}<span class="set">${esc(f.set)}</span></li>`;
+  }).join("");
+  const on = $("list").querySelector("li.on");
+  if (on) on.scrollIntoView({ block: "nearest" });
+}
+
+function refHtml(path) {
+  const name = path.split("/").pop();
+  const cap = `<div class="cap">${esc(name)}</div>`;
+  if (/\.pdf$/i.test(path)) return `<iframe class="pdf" src="${esc(path)}" title="${esc(name)}"></iframe>${cap}`;
+  return `<div class="page"><img src="${esc(path)}" alt="${esc(name)}"></div>${cap}`;
+}
+
+function renderMain() {
+  const f = files[current];
+  if (!f) { $("main").innerHTML = `<div class="cols single"><p class="none">No files to review. Run <code>cargo xtask gate</code> first.</p></div>`; return; }
+  const v = verdictOf(f);
+  const complete = f.complete && f.complete.status === "pass" ? "complete" : `completeness: ${f.complete ? f.complete.status : "?"}${f.complete && f.complete.reason ? " (" + f.complete.reason + ")" : ""}`;
+  const overset = f.overset ? ` · ${f.overset} overset characters` : "";
+  const warn = f.warnings.length ? `<details><summary>${f.warnings.length} importer warning${f.warnings.length > 1 ? "s" : ""}</summary><ul>${f.warnings.map((w) => `<li>${esc(w)}</li>`).join("")}</ul></details>` : "";
+  const ours = f.renders.map((p, n) => `<div class="page"><img loading="lazy" src="${esc(p)}" alt="page ${n + 1}"></div><div class="cap">page ${n + 1}</div>`).join("");
+  const refs = f.refs.length ? f.refs.map(refHtml).join("") :
+    `<p class="none">No Publisher reference for this file. Judge whether the person who made it would know it at a glance, with all its text and pictures present.</p>`;
+  $("main").innerHTML = `
+    <div class="head">
+      <h2>${esc(f.label)}</h2>
+      <div class="meta">${esc(f.set)} · ${f.pages} page${f.pages === 1 ? "" : "s"} · ${esc(complete)}${overset} · <code>${esc(f.sha256.slice(0, 12))}</code></div>
+      <div class="verdict">
+        <button data-v="recognizable" class="${v && v.verdict === "recognizable" ? "chosen recognizable" : ""}">Recognizable</button>
+        <button data-v="not-recognizable" class="${v && v.verdict === "not-recognizable" ? "chosen not-recognizable" : ""}">Not recognizable</button>
+        <textarea id="note" placeholder="What's wrong (needed for Not recognizable)">${esc(v && v.note ? v.note : "")}</textarea>
+        <button data-v="clear" title="Remove this file's verdict">Clear</button>
+      </div>
+      <div class="keys">R recognizable · N not recognizable · J / K or ↓ / ↑ next and previous · verdicts stay in this browser until you save</div>
+      ${warn}
+    </div>
+    <div class="cols${f.refs.length ? "" : " single"}">
+      <div class="col"><h3>Foliolum</h3>${ours}</div>
+      ${f.refs.length ? `<div class="col"><h3>Publisher</h3>${refs}</div>` : `<div class="col">${refs}</div>`}
+    </div>`;
+  $("main").scrollTop = 0;
+  try { history.replaceState(null, "", "#" + encodeURIComponent(f.label)); } catch (e) {}
+}
+
+function setVerdict(kind) {
+  const f = files[current];
+  const note = ($("note") && $("note").value.trim()) || "";
+  if (kind === "clear") { local[f.sha256] = null; }
+  else if (kind === "recognizable") { local[f.sha256] = note ? { verdict: kind, note } : { verdict: kind }; }
+  else {
+    if (!note) { $("note").focus(); $("note").placeholder = "Say what's wrong, then press Not recognizable again"; return; }
+    local[f.sha256] = { verdict: kind, note };
+  }
+  persist();
+  if (kind !== "clear") step(1, true); else { renderList(); renderMain(); }
+}
+
+function step(d, skipDone) {
+  let i = current;
+  for (let n = 0; n < files.length; n++) {
+    i = (i + d + files.length) % files.length;
+    if (!skipDone || !pendingOnly || !verdictOf(files[i])) break;
+  }
+  current = i; renderList(); renderMain();
+}
+
+function save() {
+  const all = Object.assign({}, DATA.verdicts || {});
+  for (const [k, v] of Object.entries(local)) { if (v) all[k] = v; else delete all[k]; }
+  const sorted = {};
+  for (const k of Object.keys(all).sort()) sorted[k] = all[k];
+  const blob = new Blob([JSON.stringify(sorted, null, 2) + "\n"], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "verdicts.json";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+$("list").addEventListener("click", (e) => { const li = e.target.closest("li"); if (li) { current = +li.dataset.i; renderList(); renderMain(); } });
+$("main").addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if (b) setVerdict(b.dataset.v); });
+$("save").addEventListener("click", save);
+$("filter").addEventListener("click", () => { pendingOnly = !pendingOnly; renderList(); });
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "TEXTAREA") { if (e.key === "Escape") e.target.blur(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === "r") setVerdict("recognizable");
+  else if (e.key === "n") setVerdict("not-recognizable");
+  else if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); step(1); }
+  else if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); step(-1); }
+});
+// review.html#<label> opens that file; otherwise the first without a verdict.
+const asked = files.findIndex((f) => "#" + f.label === decodeURIComponent(location.hash));
+const firstOpen = files.findIndex((f) => !verdictOf(f));
+current = asked >= 0 ? asked : firstOpen >= 0 ? firstOpen : 0;
+renderList(); renderMain();
+</script>
+</body>
+</html>
