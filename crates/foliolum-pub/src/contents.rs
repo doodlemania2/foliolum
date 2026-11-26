@@ -156,7 +156,7 @@ fn parse_with_budget(b: &[u8], bytes: usize, items: usize) -> Result<Contents> {
                 if linked_cells > 100_000 {
                     return Err(PubError::Malformed("too many linked table cells".into()));
                 }
-                (table.cells, table.margins) = cells.clone();
+                (table.cells, table.margins, table.valign) = cells.clone();
                 table.validate()?;
             } else {
                 shape.table = None;

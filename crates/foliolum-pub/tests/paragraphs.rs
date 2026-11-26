@@ -109,7 +109,14 @@ fn observed_real_paragraph_fixtures_match_the_documented_settings() {
         let imported = load(name);
         let p = &imported.document.stories.values().next().unwrap().paras[0];
         assert_eq!(p.chars.leading, Some(leading), "{name}");
-        assert_eq!(p.para.auto_leading, factor, "{name}");
+        // Publisher's "N lines" is N times the font's line height (pub-format/font-metrics.md);
+        // these fixtures are set in Calibri, 1.2207 em.
+        let want = factor.map(|f| f * 1.2207);
+        assert!(
+            p.para.auto_leading.zip(want).is_none_or(|(a, b)| (a - b).abs() < 1e-9) && p.para.auto_leading.is_some() == want.is_some(),
+            "{name}: {:?}",
+            p.para.auto_leading
+        );
     }
     for (name, key, expected) in [
         ("text__indent-first-18", "firstLineIndent", 18.0),
@@ -266,9 +273,6 @@ fn observed_warning_fields_match_real_fixtures() {
         } else {
             assert!(!imp.notes.iter().any(|w| w.contains("Publisher character fields:")), "{:?}", imp.notes);
             assert!(imp.notes.iter().any(|w| w.contains("Publisher paragraph fields: defaults [0x30]; runs [none]")));
-        }
-        if name == "table__2x2" {
-            assert!(imp.warnings.iter().any(|w| w.contains("other than margins")));
         }
     }
 }

@@ -26,7 +26,7 @@
 //! score imports, never to infer format encoding.
 //!
 //! ## Not supported yet
-//! Table cell vertical alignment and border dash styles; non-default WordArt warps and exact
+//! Table cell border dash styles; non-default WordArt warps and exact
 //! stretching (default upward arch uses measured editable path text; other warps stay straight),
 //! pattern/texture fills (approximated by the fill colour), picture crops
 //! other than rectangular, PICT pictures (an empty graphic frame keeps their place), custom tab stops,
@@ -47,6 +47,7 @@ mod borderart;
 mod contents;
 mod escher;
 mod metafile;
+mod metrics;
 mod overset;
 mod paths;
 mod presets;
@@ -62,7 +63,7 @@ use std::sync::Arc;
 
 use designcraft_doc::build::NewDocument;
 use designcraft_doc::{
-    Arrowhead, Asset, AssetId, Content, Document, Fill, Graphic, Item, ItemId, LayerId, ParaFormat, Shape, SpreadRef, Stroke, StrokeType,
+    Arrowhead, Asset, AssetId, Content, Document, Fill, Graphic, Item, ItemId, LayerId, ParaFormat, Shape, SpreadRef, StoryId, Stroke, StrokeType,
     VerticalJustification,
 };
 use designcraft_geom::{Affine, BezPath, PathData, Point, Rect, shapes};
@@ -225,6 +226,7 @@ pub fn import_pub_with(bytes: &[u8], prepare: impl FnOnce(&mut Document)) -> Res
     b.warnings.extend(q.warnings.iter().cloned());
     b.warnings.extend(dr.warnings.iter().cloned());
     b.build()?;
+    metrics::apply(&mut b.doc, &b.wordart);
     let mut warnings: Vec<String> = Vec::new();
     let mut notes = Vec::new();
     let mut seen = HashSet::new();
@@ -265,6 +267,8 @@ struct Builder<'a> {
     /// Linked frames after the first, created empty: their insets and vertical justification,
     /// applied once they are threaded into the story.
     followers: Vec<(ItemId, [f64; 4], VerticalJustification)>,
+    /// WordArt's stories: sized to their frames by `wordart_frame`, not laid out as Publisher text.
+    wordart: HashSet<StoryId>,
     warnings: Vec<String>,
     table_cells: usize,
     table_units: usize,
@@ -308,6 +312,7 @@ impl<'a> Builder<'a> {
             pictures: HashMap::new(),
             chains: BTreeMap::new(),
             followers: Vec::new(),
+            wordart: HashSet::new(),
             warnings: Vec::new(),
             table_cells: 0,
             table_units: 0,
@@ -385,7 +390,7 @@ impl<'a> Builder<'a> {
         }
         for (id, inset, vj) in std::mem::take(&mut self.followers) {
             if let Some(t) = self.doc.item_mut(id).and_then(Item::text_frame_mut) {
-                t.options.inset = inset;
+                t.options.inset = fit_inset(inset, vj);
                 t.options.vertical_justification = vj;
             }
         }
@@ -471,7 +476,11 @@ impl<'a> Builder<'a> {
             let v = |k: u16| sh.prop(k).map_or(0.0, |e| pt(f64::from(e as i32)).max(0.0));
             [v(0x0082), v(0x0081), v(0x0084), v(0x0083)]
         });
-        let xf = transform(rect, rotation, sh.flip_h, sh.flip_v);
+        let (path, xf) = if text_id.is_some() {
+            flipped_text(path, rect, rotation, sh.flip_h, sh.flip_v)
+        } else {
+            (path, transform(rect, rotation, sh.flip_h, sh.flip_v))
+        };
         if let Some(item) = self.doc.item_mut(id) {
             item.shape = shape_kind;
             item.path = path;
@@ -485,7 +494,7 @@ impl<'a> Builder<'a> {
             };
             match (insets, &mut item.content) {
                 (Some(inset), Content::Text(t)) => {
-                    t.options.inset = inset;
+                    t.options.inset = fit_inset(inset, vj);
                     t.options.vertical_justification = vj;
                 }
                 (Some(inset), _) if follower => self.followers.push((id, inset, vj)),
@@ -539,6 +548,7 @@ impl<'a> Builder<'a> {
         let text: String = raw.replace("\r\n", "\n").replace('\r', "\n").chars().filter(|c| *c == '\n' || !c.is_control()).collect();
         let curved = Self::wordart_path(sh, rect, &text);
         let (id, sid) = self.doc.add_text_frame(r, rect, self.layer, &text, ParaFormat::default()).map_err(|e| PubError::Malformed(e.to_string()))?;
+        self.wordart.insert(sid);
         let fill = self.fill(sh, false);
         let stroke = self.stroke(sh);
         // Geometry Text booleans: each flag (bit n) counts only with its "use" bit (n + 16).
@@ -1293,6 +1303,30 @@ impl<'a> Builder<'a> {
     }
 }
 
+/// Publisher keeps a line in a frame while its baseline is above the frame's bottom edge: the
+/// bottom inset doesn't limit it (docs/pub-format/font-metrics.md). DesignCraft keeps a line while
+/// its baseline is above the bottom inset. In a top-aligned frame the bottom inset does nothing
+/// else, so it is left out there and both keep the same lines; a centred or bottom-aligned frame
+/// keeps it, as it places the text.
+fn fit_inset(mut inset: [f64; 4], vj: VerticalJustification) -> [f64; 4] {
+    if vj == VerticalJustification::Top {
+        inset[2] = 0.0;
+    }
+    inset
+}
+
+/// A flipped shape that holds text: Publisher, like the rest of Office, flips the shape but never
+/// mirrors its text. A horizontal flip leaves the text as it reads; a vertical flip turns it half
+/// a turn (both together are the same half turn). So the frame takes the half turn, and its outline
+/// the mirror that remains (left-right whenever exactly one flip is set), and the text reads.
+fn flipped_text(mut path: PathData, rect: Rect, rotation: f64, flip_h: bool, flip_v: bool) -> (PathData, Affine) {
+    if flip_h != flip_v {
+        let c = rect.center().to_vec2();
+        path.transform(Affine::translate(c) * Affine::scale_non_uniform(-1.0, 1.0) * Affine::translate(-c));
+    }
+    (path, transform(rect, rotation + if flip_v { 180.0 } else { 0.0 }, false, false))
+}
+
 /// Rotation (clockwise degrees) and flips about the frame's centre.
 fn transform(r: Rect, rotation: f64, flip_h: bool, flip_v: bool) -> Affine {
     let c = r.center();
@@ -1441,6 +1475,66 @@ mod tests {
         let got = top[0].xf.as_coeffs();
         assert!(got.iter().zip(want.as_coeffs()).all(|(a, b)| (a - b).abs() < 1e-6), "{got:?}");
         assert!(matches!(top[1].content, Content::Unassigned));
+    }
+
+    #[test]
+    fn a_line_may_reach_into_the_bottom_inset_of_a_top_aligned_frame() {
+        assert_eq!(fit_inset([2.88; 4], VerticalJustification::Top), [2.88, 2.88, 0.0, 2.88]);
+        for vj in [VerticalJustification::Center, VerticalJustification::Bottom] {
+            assert_eq!(fit_inset([2.88; 4], vj), [2.88; 4], "the inset places the text in a {vj:?} frame");
+        }
+        // Bug 95894's running header: 10 pt Times New Roman in a 13.5 pt frame. Its baseline sits
+        // 8.91 pt below the 2.88 pt top inset, inside the bottom inset but above the frame's edge.
+        let mut d = Document::new(&NewDocument { pages: 1, ..Default::default() });
+        let layer = d.default_layer();
+        let (id, sid) = d
+            .add_text_frame(SpreadRef::Doc(0), Rect::new(25.5, 22.5, 583.5, 36.0), layer, "Central Tree Senior News", ParaFormat::default())
+            .unwrap();
+        let n = d.story(sid).unwrap().text.len();
+        d.story_mut(sid).unwrap().format_chars(0..n, |cf| {
+            cf.over.font_family = Some("Times New Roman".into());
+            cf.over.size = Some(10.0);
+        });
+        d.item_mut(id).and_then(Item::text_frame_mut).unwrap().options.inset = fit_inset([2.88; 4], VerticalJustification::Top);
+        metrics::apply(&mut d, &HashSet::new());
+        assert!(!designcraft_compose::compose_story(&d, sid, &Default::default()).is_overset());
+    }
+
+    #[test]
+    fn a_flipped_text_box_flips_its_shape_but_its_text_still_reads() {
+        // A right triangle with its right angle at the bottom left, in a 100 × 50 pt box.
+        let rect = Rect::new(100.0, 100.0, 200.0, 150.0);
+        let tri = || {
+            let mut p = BezPath::new();
+            p.move_to((100.0, 100.0));
+            p.line_to((100.0, 150.0));
+            p.line_to((200.0, 150.0));
+            p.close_path();
+            PathData::from_bezpath(&p)
+        };
+        let corners = |path: &PathData, xf: Affine| {
+            let mut pts: Vec<(i64, i64)> = path
+                .to_bezpath()
+                .elements()
+                .iter()
+                .filter_map(|e| e.end_point())
+                .map(|p| xf * p)
+                .map(|p| (p.x.round() as i64, p.y.round() as i64))
+                .collect();
+            pts.sort_unstable();
+            pts.dedup();
+            pts
+        };
+        for (flip_h, flip_v) in [(true, false), (false, true), (true, true)] {
+            let want = corners(&tri(), transform(rect, 0.0, flip_h, flip_v));
+            let (path, xf) = flipped_text(tri(), rect, 0.0, flip_h, flip_v);
+            assert_eq!(corners(&path, xf), want, "the outline lands where the flip puts it ({flip_h}, {flip_v})");
+            // The text is never mirrored: the frame's transform keeps its orientation (determinant > 0).
+            let [a, b, c, d, ..] = xf.as_coeffs();
+            assert!(a * d - b * c > 0.0, "text mirrored for ({flip_h}, {flip_v})");
+            // A horizontal flip alone leaves the text upright; a vertical one turns it half a turn.
+            assert_eq!(a > 0.0, !flip_v);
+        }
     }
 
     fn styled(props: &[(u16, u32)]) -> escher::EShape {
