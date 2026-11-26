@@ -43,6 +43,8 @@ expect_status 200 /
 expect_header '^cache-control: no-cache, no-transform' /
 expect_header "^content-security-policy: default-src 'none'; script-src 'self' 'sha256-" /
 expect_header "'wasm-unsafe-eval'" /
+# Send for signature talks to TDPdf Sign and nothing else.
+expect_header "connect-src 'self' https://sign.tdpdf.com;" /
 expect_header '^x-content-type-options: nosniff' /
 grep -qF 'Based on DesignCraft by the ArtCraft team' <<<"$page" || fail "/: no DesignCraft credit"
 

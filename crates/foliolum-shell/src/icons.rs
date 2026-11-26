@@ -10,8 +10,20 @@
 use egui::{Color32, Painter, Pos2, Rect, Shape, Stroke, pos2, vec2};
 
 /// Every icon [`paint`] draws.
-pub const NAMES: &[&str] =
-    &["fo-new", "fo-open", "fo-save-copy", "fo-print", "fo-picture", "fo-booklet", "fo-undo", "fo-redo", "fo-copy", "fo-paste", "fo-spelling"];
+pub const NAMES: &[&str] = &[
+    "fo-new",
+    "fo-open",
+    "fo-save-copy",
+    "fo-print",
+    "fo-picture",
+    "fo-booklet",
+    "fo-sign",
+    "fo-undo",
+    "fo-redo",
+    "fo-copy",
+    "fo-paste",
+    "fo-spelling",
+];
 
 struct Pen<'a> {
     p: &'a Painter,
@@ -116,6 +128,12 @@ pub fn paint(p: &Painter, r: Rect, name: &str, c: Color32) -> bool {
             pen.line(&[(4.5, 11.0), (8.0, 12.0)]);
             pen.line(&[(15.5, 8.0), (12.0, 9.0)]);
             pen.line(&[(15.5, 11.0), (12.0, 12.0)]);
+        }
+        // A sheet with a signature line, and a pen signing on it.
+        "fo-sign" => {
+            pen.line(&[(11.0, 18.0), (3.0, 18.0), (3.0, 3.0), (13.0, 3.0), (13.0, 7.0)]);
+            pen.line(&[(5.0, 15.0), (10.0, 15.0)]);
+            pen.closed(&[(18.5, 6.5), (16.5, 4.5), (9.5, 11.5), (9.0, 14.0), (11.5, 13.5)]);
         }
         // A path that turns back on itself, ending in an arrowhead pointing left.
         "fo-undo" | "fo-redo" => {

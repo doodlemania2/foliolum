@@ -53,6 +53,21 @@ On the shared m4: `nice -n 15 env CARGO_BUILD_JOBS=4 trunk build` (about 5 minut
   and Arial files export PDFs set in Tinos and Arimo, including one dropped while the fonts were held
   back 8 seconds.
 
+## Send for signature
+
+File ▸ Send for signature sends the open document, as a PDF, to TDPdf Sign (https://sign.tdpdf.com),
+which emails each person a link to sign it (`src/sign.rs`, `src/sign_web.rs`). People mark where each
+signer signs by typing `{{signature, r1}}` (r2 for the second signer, and so on; `{{date, r1}}` and
+`{{name, r1}}` too) in a text box: Sign finds them in the PDF and puts fields there. When every signer has
+one, the document is sent at once; otherwise it is left as a draft in Sign to finish there.
+
+- The person pastes their own Sign API token. It is kept in memory only, until the tab closes. There is no
+  shared or service token.
+- The browser calls Sign directly, so the CSP's `connect-src` names `https://sign.tdpdf.com`
+  (`deploy/image/prepare.sh`; the smoke test checks it).
+- Signing in to Sign from the browser (the PKCE flow TDPdf uses) needs Sign to accept
+  `https://app.foliolum.app` as a redirect, which it doesn't yet.
+
 ## Not yet
 
 - Branding: patch 0002 replaces DesignCraft's ArtCraft branding with Foliolum's (checked in Chrome: start

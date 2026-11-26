@@ -33,6 +33,20 @@
         "crates/foliolum-fonts/**",
         "apps/foliolum-cli/**"
       ]
+    },
+    {
+      "id": "send-for-signature",
+      "name": "Send for signature",
+      "status": "building",
+      "summary": "Send a finished document to TDPdf Sign, which emails each person a link to sign it.",
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "apps/foliolum-web/src/sign.rs",
+        "apps/foliolum-web/src/sign_web.rs",
+        "crates/foliolum-shell/src/tables.rs"
+      ]
     }
   ]
 }

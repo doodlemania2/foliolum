@@ -28,6 +28,13 @@ mod graphics;
 #[cfg_attr(not(any(target_arch = "wasm32", test)), allow(dead_code))]
 mod pub_open;
 
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod sign;
+
+#[cfg(target_arch = "wasm32")]
+mod sign_web;
+
 /// Foliolum's name and links in DesignCraft's UI, in place of the ArtCraft mark and community, which only
 /// DesignCraft may show (fork/patches/0002-ui-embedder-brand.patch).
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

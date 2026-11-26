@@ -12,6 +12,9 @@ pub enum Action {
     Menu(&'static str, &'static str),
     /// Pick one of DesignCraft's tools (`designcraft_tools::TOOL_GROUPS` ids).
     Tool(&'static str),
+    /// Something the app around the editor does (`crate::set_app_actions`), with an open document:
+    /// "sign" is Send for signature.
+    App(&'static str),
 }
 
 /// One button: its label, what it does, and its icon: one of ours (`fo-…`, [`crate::icons`]) or one of
@@ -69,6 +72,7 @@ pub const TABS: &[Tab] = &[
                     menu("PDF for printing…", "app.exportPdf", Some("fo-print")),
                     menu("Picture…", "app.exportPng", Some("fo-picture")),
                     menu("Booklet…", "app.printBooklet", Some("fo-booklet")),
+                    Button { label: "Send for signature…", action: Action::App("sign"), icon: Some("fo-sign") },
                 ],
             },
             Group {
