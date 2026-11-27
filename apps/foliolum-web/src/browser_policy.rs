@@ -7,6 +7,16 @@ pub(crate) fn has_query_flag(query: &str, flag: &str) -> bool {
     form_urlencoded::parse(query.as_bytes()).any(|(key, _)| key == flag)
 }
 
+/// The invented demo publications the page carries (`demo/<name>.pub`), for `?demo=<name>`.
+pub(crate) const DEMOS: &[&str] = &["bulletin"];
+
+/// The demo `?demo=<name>` asks for, when it is one of [`DEMOS`]; anything else opens nothing.
+pub(crate) fn demo_name(query: &str) -> Option<&'static str> {
+    let query = query.strip_prefix('?').unwrap_or(query);
+    let wanted = form_urlencoded::parse(query.as_bytes()).find(|(key, _)| key == "demo")?.1;
+    DEMOS.iter().copied().find(|d| *d == wanted)
+}
+
 pub(crate) fn mime_for(name: &str) -> &'static str {
     match name.rsplit('.').next().map(str::to_ascii_lowercase).as_deref() {
         Some("png") => "image/png",
@@ -20,6 +30,15 @@ pub(crate) fn mime_for(name: &str) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_a_known_demo_opens() {
+        assert_eq!(super::demo_name("?demo=bulletin"), Some("bulletin"));
+        assert_eq!(super::demo_name("?webgl&demo=bulletin"), Some("bulletin"));
+        assert_eq!(super::demo_name("?demo=../secret"), None);
+        assert_eq!(super::demo_name("?demo="), None);
+        assert_eq!(super::demo_name(""), None);
+    }
+
     use super::{has_query_flag, mime_for};
 
     #[test]
