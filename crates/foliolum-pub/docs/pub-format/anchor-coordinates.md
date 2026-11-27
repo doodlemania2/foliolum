@@ -72,6 +72,13 @@ Base rectangle: width 1 828 800 EMU = 144 pt, height 914 400 = 72 pt, left 72 pt
 
 The anchor is unchanged. The shape record's flag word (0xF00A, second 32-bit value) differs from base (0xA00): `flip-h` = 0xA40 (+0x40), `flip-v` = 0xA80 (+0x80). INFERENCE: bit 0x40 = flip horizontal, bit 0x80 = flip vertical (names agree; both flips together unsampled; `picture__flip-h.pub` also shows 0x40 in the flags). Flip does not move or resize the box.
 
+A flipped text box (bug 95894, page 5's running header: flag 0x40 on a type-202 text box) is
+drawn by Publisher, as by the rest of Office, with its text readable: the flip applies to the
+shape, and a vertical flip turns the text half a turn instead of mirroring it. INFERENCE from the
+file: the same header on the other pages reads left to right with the same three parts, so a
+mirrored header was never what its author saw. The importer flips the outline and keeps the text
+readable.
+
 ## 3. Groups (group__two, group__rotated, plus 19 more groups in other files)
 
 **OBSERVATION.** A group is a nested group container (0xF003) whose first shape container is the group's own shape (flags 0x201; `Contents` type 0x30 or 0x31 object), then the children. Three different coordinate records appear:

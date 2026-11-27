@@ -22,6 +22,14 @@ use tables::{Action, Button, TABS};
 
 static SIMPLE: AtomicBool = AtomicBool::new(true);
 
+/// What runs the ribbon's [`Action::App`] buttons: the app around the editor sets it at startup.
+static APP_ACTIONS: std::sync::OnceLock<fn(&mut DesignApp, &str)> = std::sync::OnceLock::new();
+
+/// Sets what runs the ribbon's [`Action::App`] buttons, once. Without it they are greyed out.
+pub fn set_app_actions(run: fn(&mut DesignApp, &str)) -> bool {
+    APP_ACTIONS.set(run).is_ok()
+}
+
 /// Whether the simple editor is showing (rather than DesignCraft's full one).
 pub fn simple() -> bool {
     SIMPLE.load(Ordering::Relaxed)
@@ -91,6 +99,7 @@ fn enabled(app: &DesignApp, b: &Button) -> bool {
     match b.action {
         Action::Menu(id, _) => designcraft_ui_egui::menus::menu_enabled(app, id),
         Action::Tool(_) => true,
+        Action::App(_) => APP_ACTIONS.get().is_some() && app.session.active().is_some(),
     }
 }
 
@@ -105,6 +114,11 @@ fn run(app: &mut DesignApp, b: &Button) {
             designcraft_ui_egui::menus::activate(app, id, &params);
         }
         Action::Tool(id) => app.select_tool(id),
+        Action::App(id) => {
+            if let Some(run) = APP_ACTIONS.get() {
+                run(app, id);
+            }
+        }
     }
 }
 

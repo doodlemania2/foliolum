@@ -159,6 +159,25 @@ column keys.
   file with differing values (bug 95894) differs only in 0x0A, which is left in
   either order. A file whose cells differ in 0x0B or 0x0C alone would settle it.
 
+## Cell vertical alignment
+
+Type-0x63 cell key 0x07 (kind 0x10) holds the cell's vertical text alignment in its low byte,
+with the codes text boxes use for theirs (`contents-stream.md`, key 0x35): **1 = middle,
+2 = bottom**; absent or anything else = top.
+
+- Bug 116018's three-row date table stores 1 in all six cells (the first as 0x3001). In the
+  Publisher PDF each cell's text is centred in its row: "Dom. 28" (one line) and "Santa Famiglia …
+  del Signore" (two lines) are centred on the same middle, 67.2 pt, within 1.5 pt; the agenda table
+  below it, with no 0x07, is top-aligned.
+- 2 = bottom is read by analogy with the text-box key and is not confirmed. Bug 89393's prayer
+  table stores 2 in its first column; its rows have no spare height, so the PDF looks the same
+  either way. DesignCraft places a bottom-aligned cell's last baseline on the inner bottom edge, a
+  few points lower than Publisher would place a line that fills the cell.
+- The high byte (0x30 in bugs 116018, 84096 and 89061, 0x2D in 95894) appears only in a table's
+  first cell, and no visible effect was found. UNKNOWN.
+- Keys 0x09 (an EMU-sized value that varies by cell, close to the row's height) and 0x0E (114300
+  or 228600) are also in most cell records. UNKNOWN; not read.
+
 ## Native mapping and limits
 
 DesignCraft `Table` has row heights, column widths, a row-major cell grid and

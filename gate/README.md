@@ -28,7 +28,9 @@ four pass. A check that can't be made yet is shown as `–` and is never a pass.
 - `fixtures/pubsmith/`: pubsmith's 142 fixtures, made with Publisher, each with Publisher's layout export;
 - `fixtures/dev22/`: the spike's 22 public files (21 from Apache POI, one from LibreOffice), no exports;
 - `fixtures/pubwork/`: Pubwork's patched libmspub reader (MPL-2.0), the second reference;
-- with `--lobz`, `fixtures/lobz/`: the LibreOffice Bugzilla set, below.
+- with `--lobz`, `fixtures/lobz/`: the LibreOffice Bugzilla set, below, and `fixtures/lobz-refs/`:
+  what Publisher showed for 16 of those files, where the bug has it (a PDF exported from Publisher
+  or a screenshot of the file in Publisher, never LibreOffice's rendering).
 
 ## The LibreOffice Bugzilla set (lobz)
 
@@ -131,8 +133,22 @@ Output goes to `target/gate/<set>/`: one PDF per file, `<label>/page-NN.png` ren
 
 ## Recording a verdict
 
-Look at `target/gate/<set>/<label>/page-*.png` beside the original, then add the file's SHA-256 (from
-`results.jsonl`) to `verdicts.json`:
+```sh
+cargo xtask gate --set dev22 --names fixtures/dev22
+cargo xtask gate --set lobz --names fixtures/lobz
+cargo xtask review dev22 lobz        # writes target/gate/review.html
+```
+
+Open `target/gate/review.html` in a browser. It shows each file that exported, its pages beside
+Publisher's PDF or screenshot when there is one (`fixtures/lobz-refs/`), its completeness result,
+overset and the importer's warnings, and takes **Recognizable** or **Not recognizable** with a note
+(keys R and N; J and K move between files). Verdicts stay in that browser until **Save
+verdicts.json**, which downloads every verdict, old and new; put it over `gate/verdicts.json` and
+run the gate again with `--record`. The page loads the renders from `target/gate/` and is never
+published: the files carry real names.
+
+By hand: look at `target/gate/<set>/<label>/page-*.png` beside the original, then add the file's
+SHA-256 (from `results.jsonl`) to `verdicts.json`:
 
 ```json
 { "<sha256>": { "verdict": "recognizable" },

@@ -2783,6 +2783,7 @@ dependencies = [
  "designcraft-engine",
  "designcraft-fonts",
  "designcraft-format",
+ "designcraft-geom",
  "designcraft-ui-egui",
  "eframe",
  "egui",

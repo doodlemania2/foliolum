@@ -140,6 +140,33 @@ done <<'LIST'
 163388 197010 e07f44af250244ffc4a2e5abf35e9ee74493bdb38a60b6cc060c1bdfe6195919
 LIST
 echo "==> $(find "$ROOT/fixtures/lobz" -name '*.pub' | wc -l | tr -d ' ') .pub files in $ROOT/fixtures/lobz"
+
+# What Publisher showed, where the bug has it: a PDF the author exported from Publisher or a screenshot
+# of the file open in Publisher (never LibreOffice's rendering). `cargo xtask review` shows each beside
+# our pages, named lo-bz<bug>-<pub attachment>.ref-<attachment>.<ext> so it pairs with its file.
+echo "==> lobz references (Publisher PDFs and screenshots attached to the same bugs)"
+mkdir -p "$ROOT/fixtures/lobz-refs"
+while read -r bug pub att ext sha; do
+  fetch "https://bugs.documentfoundation.org/attachment.cgi?id=$att" "$ROOT/fixtures/lobz-refs/lo-bz$bug-$pub.ref-$att.$ext" "$sha"
+done <<'LIST'
+61579 75659 109475 pdf 1ed47a499f48869034c1f633859bc9dfd4f443bd36bdc1e9a81f303cacd91e6b
+61579 75659 75757 png 3297491346481c9084433be4765931a726455ebaac4e19573949373956260f17
+64631 79338 79337 png 71264ecace2450055f3b60496da20f6d6ff225fd8d5c2f9986a041f950e715c1
+69080 99486 85408 pdf 9fef96483fad641e580192ca14d8f37abe695d9cc233cebb4e770bc777be70b4
+69080 131925 85408 pdf 9fef96483fad641e580192ca14d8f37abe695d9cc233cebb4e770bc777be70b4
+78733 99073 99075 jpg f5d16a70ff1f06b38653568212279bde8d55eba89817c47298477f85bdd183a3
+78739 99784 99084 jpg 1331314697f661d901da0a56e1f41365bb34220d8c3fec9c57e5f700d2f9923e
+79182 99721 99722 png 7dc9c229f62dd420eaca3a35791f8caeaaaeb2e3b6b7327b17cf5457af594c94
+84096 106549 106882 pdf 02e32b8c6b6e16dc5feb68445058a94f8e7a1c6ca4fc801517f63cf3113d441d
+89393 113398 113399 pdf 61fca22d161265c557b9075e8f4e9925451a7697ac1083cffeeb78ed805da81f
+95348 120057 145961 png 3aea206377de39245ed39eebdd98a0ee59ed17813648d6691166a4044545284a
+100639 125942 125958 png 1803ff998f2f737be1454000233f1c6e5f9123d3cfb87f3a17fcb08893a8ba4d
+116018 140164 140163 pdf 14485e54d86e9ebe5dba013db6cec881552cdaf7771079c98f425cd2e5fe0fcc
+121800 147164 147163 pdf 42eed4a9c493469abe18cd127c8bae04839729f287c66104f2588800b01e1217
+133297 161173 161175 png de7ec5152539cb043d1db5babdade1bee8778bd91138da7bdedd83071dab9315
+150838 182274 182275 png 7d3efdaf5aa4f797f8059528b95cb0db046b70fe0929cdcfbaf98d31d8373acb
+LIST
+echo "==> $(find "$ROOT/fixtures/lobz-refs" -type f | wc -l | tr -d ' ') references in $ROOT/fixtures/lobz-refs"
 fi
 
 echo "==> Pubwork's reader at ${PUBWORK_COMMIT:0:12}"

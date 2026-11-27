@@ -63,6 +63,16 @@ directly, as in every other DesignCraft crate. Declaring it as a normal dependen
 zip 3.0.0 into our `Cargo.lock`, which carries three security advisories fixed in zip 9 (#41). Nothing
 else changes. Drop it once upstream makes the same move or raises the workspace `zip` to 9.
 
+### 0006-ui-embedder-mark-accent
+
+`crates/ui-egui`: two more fields on the brand from 0002. `mark` is the app's own mark, as SVG path shapes
+drawn on the start screen beside the welcome and at the top of About. `accent` holds the app's accent
+colours in place of DesignCraft's blue: links, filled buttons, selection and selected rows, for dark and
+light brightness, never in High Contrast. Foliolum sets its quill and rubric red
+(`apps/foliolum-web/src/main.rs`). With DesignCraft's own brand both are empty and nothing changes. The
+tokens are built in one place (`Tokens::for_brightness`) that an embedder can't reach. Drop it if upstream
+gains a theme hook.
+
 ## Upstream test baseline
 
 At pin `47ef1ec` these DesignCraft UI tests already fail on macOS without any of our patches (`cargo test

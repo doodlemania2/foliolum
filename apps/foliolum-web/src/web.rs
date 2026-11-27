@@ -38,6 +38,7 @@ pub fn start() {
     eframe::WebLogger::init(log::LevelFilter::Info).ok();
     designcraft_ui_egui::brand::set(crate::BRAND);
     designcraft_ui_egui::shell::set(foliolum_shell::SHELL);
+    foliolum_shell::set_app_actions(app_action);
     wasm_bindgen_futures::spawn_local(async {
         let Some(document) = web_sys::window().and_then(|w| w.document()) else {
             log::error!("no document");
@@ -82,7 +83,14 @@ pub fn start() {
                     if has_query_flag(&query(), "sample") {
                         let _ = app.run("file.newSample", serde_json::json!({}));
                     }
-                    Ok(Box::new(WebShell { app, inbox, read_errors: Default::default(), graphics: creator_graphics, held: Vec::new() }))
+                    Ok(Box::new(WebShell {
+                        app,
+                        inbox,
+                        read_errors: Default::default(),
+                        graphics: creator_graphics,
+                        held: Vec::new(),
+                        sign: Default::default(),
+                    }))
                 }),
             )
             .await;
@@ -355,6 +363,51 @@ struct WebShell {
     graphics: GraphicsState,
     /// Files that arrived before the fonts did ([`crate::fonts_web`]), in order.
     held: Vec<ImportedFile>,
+    /// Send for signature ([`crate::sign`]).
+    sign: crate::sign::Dialog,
+}
+
+/// The ribbon's buttons for things outside DesignCraft ([`foliolum_shell::set_app_actions`]).
+fn app_action(_: &mut DesignApp, id: &str) {
+    if id == "sign" {
+        SIGN_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// Send for signature was pressed; the shell opens its dialog on the next frame.
+static SIGN_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+impl WebShell {
+    fn sign_dialog(&mut self, ctx: &egui::Context) {
+        if SIGN_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            let title = self.app.session.active().map(|d| d.title()).unwrap_or_default();
+            self.sign.open(&title);
+        }
+        if !self.sign.open {
+            return;
+        }
+        let marks = self.app.session.doc().map(|d| crate::sign::document_marks(&d.doc)).unwrap_or_default();
+        let Some(mut request) = self.sign.show(ctx, &marks) else { return };
+        let slot = self.sign.result_slot();
+        let pdf = self.app.session.execute("file.exportPdf", &serde_json::json!({})).map_err(|e| e.to_string()).and_then(|r| {
+            r["base64"].as_str().map(designcraft_engine::cmd::base64_decode).ok_or_else(|| "the PDF export returned nothing".to_string())
+        });
+        let ctx = ctx.clone();
+        match pdf {
+            Ok(pdf) => {
+                request.pdf = pdf;
+                wasm_bindgen_futures::spawn_local(async move {
+                    let outcome = crate::sign_web::run(request).await;
+                    *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(outcome);
+                    ctx.request_repaint();
+                });
+            }
+            Err(e) => {
+                *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some(crate::sign::Outcome::Failed(format!("Couldn't make the PDF: {e}")));
+                ctx.request_repaint();
+            }
+        }
+    }
 }
 
 impl eframe::App for WebShell {
@@ -428,6 +481,9 @@ impl eframe::App for WebShell {
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let _ = self.graphics.run_if_healthy(|| self.app.ui(ui));
+        let ctx = ui.ctx().clone();
+        let graphics = self.graphics.clone();
+        let _ = graphics.run_if_healthy(|| self.sign_dialog(&ctx));
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {

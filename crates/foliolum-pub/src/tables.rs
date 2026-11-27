@@ -6,7 +6,7 @@ use crate::{
     pt,
     read::{Prop, count, number, slice, u32_at},
 };
-use designcraft_doc::{CellStroke, ItemId, ParaFormat, Story, StoryId, Table};
+use designcraft_doc::{CellStroke, ItemId, ParaFormat, Story, StoryId, Table, VerticalJustification};
 use designcraft_geom::Rect;
 use std::ops::Range;
 
@@ -31,6 +31,9 @@ pub(crate) struct TableInfo {
     pub cells: Vec<CellInfo>,
     /// Each cell record's text margins in EMU, left, right, top, bottom (keys `0x0a..=0x0d`).
     pub margins: Vec<[u32; 4]>,
+    /// Each cell record's vertical text alignment (key `0x07`, low byte): 1 middle, 2 bottom,
+    /// anything else top.
+    pub valign: Vec<u32>,
     pub cell_record: u32,
     /// Largest absolute ending-versus-size-sum difference in this table, for diagnostics only.
     pub row_ending_difference: u32,
@@ -113,6 +116,7 @@ impl TableInfo {
             rows: rows_out,
             cells: Vec::new(),
             margins: Vec::new(),
+            valign: Vec::new(),
             cell_record,
             row_ending_difference,
             approximations,
@@ -145,7 +149,10 @@ impl TableInfo {
         Ok(())
     }
 }
-pub(crate) fn cells(p: &[Prop<'_>]) -> Result<(Vec<CellInfo>, Vec<[u32; 4]>)> {
+/// A cell list's cells, each cell's margins and each cell's vertical alignment, in record order.
+pub(crate) type CellRecords = (Vec<CellInfo>, Vec<[u32; 4]>, Vec<u32>);
+
+pub(crate) fn cells(p: &[Prop<'_>]) -> Result<CellRecords> {
     let n = count(number(p, 1).ok_or_else(|| bad("missing cell count"))?, MAX_CELLS)?;
     let Some(array) = p.iter().find(|p| p.key == 2 && p.kind == 0xa0) else { return Err(bad("missing cell list")) };
     let entries = array.children()?;
@@ -154,14 +161,17 @@ pub(crate) fn cells(p: &[Prop<'_>]) -> Result<(Vec<CellInfo>, Vec<[u32; 4]>)> {
     }
     let mut cells = Vec::with_capacity(n);
     let mut margins = Vec::with_capacity(n);
+    let mut valign = Vec::with_capacity(n);
     for entry in &entries {
         let p = entry.children()?;
         // Publisher leaves out a value that is 0.
         let n = |key| number(&p, key).unwrap_or(0);
         cells.push(CellInfo { row: n(1) as usize, last_row: n(2) as usize, col: n(3) as usize, last_col: n(4) as usize });
         margins.push([n(0x0a), n(0x0b), n(0x0c), n(0x0d)]);
+        // The high byte is set in some tables' first cell (0x30, 0x2d) with no visible effect found.
+        valign.push(n(0x07) & 0xff);
     }
-    Ok((cells, margins))
+    Ok((cells, margins, valign))
 }
 pub(crate) fn text_ranges(data: &[u8], units: &[u16]) -> Result<Vec<Range<usize>>> {
     let n = count(u32_at(data, 0)?, MAX_CELLS - 1)? + 1;
@@ -654,6 +664,15 @@ impl Builder<'_> {
                 cell.insets = [t, l, b, r].map(|v| pt(f64::from(*v)));
             }
         }
+        for (c, v) in info.cells.iter().zip(&info.valign) {
+            if let Some(cell) = table.cell_mut(c.row, c.col) {
+                cell.vj = match v {
+                    1 => VerticalJustification::Center,
+                    2 => VerticalJustification::Bottom,
+                    _ => VerticalJustification::Top,
+                };
+            }
+        }
         let dr = self.dr;
         if let Some(parts) = seq.and_then(|s| dr.table_parts.get(&s)) {
             self.paint_table(&mut table, info, parts);
@@ -675,7 +694,6 @@ impl Builder<'_> {
         if !can_assign {
             self.warnings.push("Table cell-text association is unconfirmed or missing; the original text was retained after the table.".into());
         }
-        self.warnings.push("Publisher table cell text formatting other than margins (vertical alignment, text direction) is not decoded.".into());
         Ok(id)
     }
 }
@@ -694,6 +712,7 @@ mod tests {
             rows: vec![457_200; 2],
             columns: vec![1_828_800; 2],
             margins: Vec::new(),
+            valign: Vec::new(),
             cell_record: 260,
             row_ending_difference: 0,
             approximations: Vec::new(),
@@ -763,6 +782,8 @@ mod tests {
         let mut info = grid();
         // Left, right, top, bottom; zero values are left out of the record.
         info.margins = vec![[18_415, 18_415, 0, 0], [36_576; 4], [36_576; 4], [36_576; 4]];
+        // Middle, bottom, top (absent), and middle with the high byte some first cells carry.
+        info.valign = vec![1, 2, 0, 0x3001 & 0xff];
         let parts = vec![
             // The second cell record (row 0, column 1), green.
             part(0, 1, (0, 0), (0, 0), &[(0x0181, 0x0050_d092)]),
@@ -788,6 +809,11 @@ mod tests {
         assert!(!table.cell(1, 0).unwrap().strokes[3].is_visible(), "column line 1 stops at row line 1");
         let [t, l, b, r] = table.cell(0, 0).unwrap().insets;
         assert!((l - 1.45).abs() < 0.01 && (r - 1.45).abs() < 0.01 && t == 0.0 && b == 0.0, "{:?}", table.cell(0, 0).unwrap().insets);
+        let vj = |r, c| table.cell(r, c).unwrap().vj;
+        assert_eq!(
+            [vj(0, 0), vj(0, 1), vj(1, 0), vj(1, 1)],
+            [VerticalJustification::Center, VerticalJustification::Bottom, VerticalJustification::Top, VerticalJustification::Center]
+        );
         assert!(imp.warnings.iter().all(|w| !w.contains("border") && !w.contains("were skipped")), "{:?}", imp.warnings);
     }
     #[test]
@@ -931,7 +957,8 @@ mod tests {
             assert_eq!(cell.text.char_format_at(0).over.font_style.as_deref(), Some("Bold"));
         }
         assert!(!t.options.border.is_visible());
-        assert!(imp.warnings.iter().any(|w| w.contains("other than margins")));
+        assert!(t.cells.iter().all(|c| c.vj == VerticalJustification::Top), "no alignment stored is top");
+        assert!(imp.warnings.iter().all(|w| !w.contains("cell text formatting")), "{:?}", imp.warnings);
     }
     #[test]
     fn a_table_taller_than_its_frame_grows_the_frame_instead_of_dropping_the_last_row() {
@@ -942,6 +969,7 @@ mod tests {
             rows: vec![228_600; rows],
             columns: vec![1_828_800; 2],
             margins: Vec::new(),
+            valign: Vec::new(),
             cells: (0..rows * 2).map(|i| CellInfo { row: i / 2, last_row: i / 2, col: i % 2, last_col: i % 2 }).collect(),
             cell_record: 0,
             row_ending_difference: 0,
@@ -974,6 +1002,7 @@ mod tests {
             rows: vec![228_600; rows],
             columns: vec![1_828_800; 2],
             margins: Vec::new(),
+            valign: Vec::new(),
             cells: (0..rows * 2).map(|i| CellInfo { row: i / 2, last_row: i / 2, col: i % 2, last_col: i % 2 }).collect(),
             cell_record: 0,
             row_ending_difference: 0,
@@ -1136,6 +1165,7 @@ mod multi_story_text_tests {
                     rows: vec![457200],
                     columns: vec![1828800; 2],
                     margins: Vec::new(),
+                    valign: Vec::new(),
                     cells: (0..2).map(|col| CellInfo { row: 0, last_row: 0, col, last_col: col }).collect(),
                     cell_record: 0,
                     row_ending_difference: 0,
