@@ -15,7 +15,7 @@ HOST="app.foliolum.app"
 
 c() { docker run --rm --network "container:${name}" "$CURL_IMAGE" -sS --max-time 20 -H "Host: $HOST" "$@"; }
 
-# get <path> [curl args]  ->  sets $status, $headers, $body
+# get <path> [curl args]  ->  sets $status, $headers
 get() {
   local path="$1"; shift
   headers="$(c -o /dev/null -D - "$@" "${BASE}${path}" | tr -d '\r' || true)"
@@ -93,6 +93,18 @@ get /favicon.svg
 expect_status 200 /favicon.svg
 expect_header '^content-type: image/svg+xml' /favicon.svg
 expect_header "^content-security-policy: default-src 'none'" /favicon.svg
+
+# The page TDPdf Sign returns the sign-in popup to, and its script (allowed by script-src 'self').
+get '/sign/callback?code=x&state=y'
+expect_status 200 /sign/callback
+expect_header '^content-type: text/html' /sign/callback
+expect_header '^cache-control: no-cache, no-transform' /sign/callback
+expect_header "^content-security-policy: default-src 'none'" /sign/callback
+c "${BASE}/sign/callback" | grep -qF 'src="/sign/callback.js"' || fail "/sign/callback: no callback script"
+get /sign/callback.js
+expect_status 200 /sign/callback.js
+expect_header '^content-type: text/javascript' /sign/callback.js
+expect_header '^cache-control: no-cache, no-transform' /sign/callback.js
 
 get /no-such-file.js
 expect_status 404 /no-such-file.js

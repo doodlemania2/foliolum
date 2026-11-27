@@ -10,8 +10,9 @@
 //! - `GET /api/v2/envelope/{id}` gives the team whose pages hold the document, for the draft path.
 //!
 //! Auth is the person's own Sign API token, sent bare in `Authorization` (no `Bearer`). It reaches the
-//! whole of their Sign account, so Foliolum keeps it only in memory, for as long as the tab is open,
-//! and never writes it anywhere. Calls go straight from the browser (Sign's API answers CORS with
+//! whole of their Sign team, so Foliolum keeps it only in memory, for as long as the tab is open,
+//! and never writes it anywhere. The person either signs in to Sign in a popup ([`SignIn`], the PKCE
+//! connect flow the TDPdf app uses) or pastes a token they made in Sign's settings. Calls go straight from the browser (Sign's API answers CORS with
 //! `*`), so the page's CSP allows `connect-src https://sign.tdpdf.com` and nothing else new.
 //!
 //! When every person has a signature placeholder the document is sent at once. Otherwise it is made
@@ -26,6 +27,92 @@ use serde_json::{Value, json};
 pub const BASE: &str = "https://sign.tdpdf.com";
 /// Where a person makes an API token in Sign.
 pub const TOKENS_PAGE: &str = "https://sign.tdpdf.com/settings/tokens";
+/// Sign's connect page: the person signs in, picks a team and allows Foliolum.
+pub const AUTHORIZE: &str = "https://sign.tdpdf.com/connect/tdpdf";
+/// Trades the one-use code for a token: POST `{code, code_verifier}`, answers `{token}`.
+pub const TOKEN: &str = "https://sign.tdpdf.com/api/connect/token";
+/// Where Sign sends the popup back to: a static page (`sign/callback.html`) that hands the query to
+/// the editor tab and closes. Sign accepts exactly this address.
+pub const REDIRECT: &str = "https://app.foliolum.app/sign/callback";
+/// The same-origin channel the callback page posts its query on.
+pub const CHANNEL: &str = "foliolum-sign-in";
+
+/// base64url without padding (RFC 4648 §5), as PKCE wants it.
+pub fn base64url(bytes: &[u8]) -> String {
+    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::with_capacity(bytes.len() * 4 / 3 + 2);
+    for c in bytes.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for i in 0..=c.len() {
+            out.push(A[(n >> (18 - 6 * i) & 63) as usize] as char);
+        }
+    }
+    out
+}
+
+/// The S256 challenge for a PKCE `verifier`.
+pub fn challenge(verifier: &str) -> String {
+    use sha2::Digest as _;
+    base64url(&sha2::Sha256::digest(verifier.as_bytes()))
+}
+
+/// The connect page's address for one sign-in.
+pub fn authorize_url(challenge: &str, state: &str) -> String {
+    let q = form_urlencoded::Serializer::new(String::new())
+        .append_pair("code_challenge", challenge)
+        .append_pair("state", state)
+        .append_pair("redirect_uri", REDIRECT)
+        .finish();
+    format!("{AUTHORIZE}?{q}")
+}
+
+/// What the callback page passed on, checked against the sign-in's `state`: the code, or why not.
+pub fn read_callback(query: &str, state: &str) -> Result<String, String> {
+    let (mut code, mut got, mut error) = (None, None, None);
+    for (k, v) in form_urlencoded::parse(query.trim_start_matches('?').as_bytes()) {
+        match &*k {
+            "code" => code = Some(v.into_owned()),
+            "state" => got = Some(v.into_owned()),
+            "error" => error = Some(v.into_owned()),
+            _ => {}
+        }
+    }
+    if got.as_deref() != Some(state) {
+        return Err("That sign-in reply wasn't for this window. Try signing in again.".into());
+    }
+    if let Some(e) = error {
+        return Err(if e == "access_denied" { "Sign-in to TDPdf Sign was cancelled.".into() } else { format!("TDPdf Sign said: {e}") });
+    }
+    code.filter(|c| !c.is_empty()).ok_or_else(|| "TDPdf Sign didn't send a sign-in code.".into())
+}
+
+/// The token from the token endpoint's answer.
+pub fn read_token(status: u16, body: &str) -> Result<String, String> {
+    if status == 400 {
+        return Err("The sign-in code had expired or was already used. Try signing in again.".into());
+    }
+    if !(200..300).contains(&status) {
+        return Err(explain(status, body));
+    }
+    serde_json::from_str::<Value>(body)
+        .ok()
+        .and_then(|v| v.get("token")?.as_str().map(str::to_string))
+        .filter(|t| !t.is_empty())
+        .ok_or_else(|| "TDPdf Sign didn't send a token.".into())
+}
+
+/// A finished sign-in: its id, and the token or why not.
+pub type SignInSlot = Arc<Mutex<Option<(u32, Result<String, String>)>>>;
+
+/// Signing in to Sign from the dialog. The browser half (`sign_web::sign_in`) writes the result to
+/// [`Dialog::sign_in_slot`], tagged with the try's id so a late answer to a cancelled one is ignored.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub enum SignIn {
+    #[default]
+    Idle,
+    Waiting(u32),
+    Failed(String),
+}
 
 /// One person to sign, in the order the placeholders number them (`r1` is the first).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -116,7 +203,7 @@ pub fn plan(people: &[Person], marks: &Marks, title: &str, token: &str) -> Plan 
         ));
     }
     if token.trim().is_empty() {
-        return Plan::NotReady("Paste your TDPdf Sign API token.".into());
+        return Plan::NotReady("Sign in to TDPdf Sign, or paste an API token.".into());
     }
     let unmarked: Vec<usize> = (1..=people.len()).filter(|n| !marks.get(n).is_some_and(|k| k.contains("signature"))).collect();
     if unmarked.is_empty() { Plan::Send } else { Plan::Draft(unmarked) }
@@ -214,6 +301,13 @@ pub struct Dialog {
     message: String,
     people: Vec<Person>,
     token: String,
+    /// The token came from signing in, not from the paste box.
+    signed_in: bool,
+    sign_in: SignIn,
+    sign_ins: u32,
+    sign_in_result: SignInSlot,
+    /// Set when Sign in is pressed; the shell takes it and starts the popup.
+    sign_in_wanted: Option<u32>,
     stage: Stage,
     result: Arc<Mutex<Option<Outcome>>>,
 }
@@ -234,6 +328,37 @@ impl Dialog {
         self.result.clone()
     }
 
+    /// Where a sign-in's token (or why not) goes, tagged with the sign-in's id.
+    pub fn sign_in_slot(&self) -> SignInSlot {
+        self.sign_in_result.clone()
+    }
+
+    /// A sign-in the person asked for, once: the shell opens the popup for it.
+    pub fn take_sign_in(&mut self) -> Option<u32> {
+        self.sign_in_wanted.take()
+    }
+
+    fn start_sign_in(&mut self) {
+        self.sign_ins += 1;
+        self.sign_in = SignIn::Waiting(self.sign_ins);
+        self.sign_in_wanted = Some(self.sign_ins);
+    }
+
+    fn pick_up_sign_in(&mut self) {
+        let Some((id, result)) = self.sign_in_result.lock().unwrap_or_else(|e| e.into_inner()).take() else { return };
+        if self.sign_in != SignIn::Waiting(id) {
+            return; // cancelled, or an older try
+        }
+        match result {
+            Ok(token) => {
+                self.token = token;
+                self.signed_in = true;
+                self.sign_in = SignIn::Idle;
+            }
+            Err(why) => self.sign_in = SignIn::Failed(why),
+        }
+    }
+
     /// Draws the dialog. Returns a request when the person presses Send or Create draft; the caller
     /// fills in `pdf` and starts it.
     pub fn show(&mut self, ctx: &egui::Context, marks: &Marks) -> Option<Request> {
@@ -243,6 +368,7 @@ impl Dialog {
         if let Some(outcome) = self.result.lock().unwrap_or_else(|e| e.into_inner()).take() {
             self.stage = Stage::Done(outcome);
         }
+        self.pick_up_sign_in();
         let mut open = self.open;
         let mut request = None;
         egui::Window::new("Send for signature").open(&mut open).collapsible(false).resizable(false).default_width(460.0).show(ctx, |ui| {
@@ -306,12 +432,7 @@ impl Dialog {
             self.people.push(Person::default());
         }
         ui.separator();
-        ui.horizontal(|ui| {
-            ui.label("API token");
-            ui.add(egui::TextEdit::singleline(&mut self.token).password(true).desired_width(220.0));
-            ui.hyperlink_to("Get one", TOKENS_PAGE);
-        });
-        ui.label(egui::RichText::new("From TDPdf Sign's settings. Foliolum keeps it only until you close this tab.").small());
+        self.account(ui);
         ui.add_space(8.0);
         let plan = plan(&self.people, marks, &self.title, &self.token);
         let mut go = None;
@@ -348,6 +469,51 @@ impl Dialog {
             send,
             external_id: String::new(),
         })
+    }
+
+    /// Signing in to Sign, or pasting a token.
+    fn account(&mut self, ui: &mut egui::Ui) {
+        if self.signed_in && !self.token.is_empty() {
+            ui.horizontal(|ui| {
+                ui.label("Signed in to TDPdf Sign.");
+                if ui.small_button("Sign out").clicked() {
+                    self.token.clear();
+                    self.signed_in = false;
+                }
+            });
+            ui.label(egui::RichText::new("Foliolum keeps the sign-in only until you close this tab.").small());
+            return;
+        }
+        match self.sign_in.clone() {
+            SignIn::Waiting(_) => {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label("Finish signing in in the TDPdf Sign window…");
+                    if ui.small_button("Cancel").clicked() {
+                        self.sign_in = SignIn::Idle;
+                    }
+                });
+            }
+            state => {
+                ui.horizontal(|ui| {
+                    if ui.button("Sign in to TDPdf Sign").clicked() {
+                        self.start_sign_in();
+                    }
+                    ui.label(egui::RichText::new("Opens a TDPdf Sign window.").small());
+                });
+                if let SignIn::Failed(why) = state {
+                    ui.label(egui::RichText::new(why).small());
+                }
+            }
+        }
+        ui.collapsing("Or paste an API token", |ui| {
+            ui.horizontal(|ui| {
+                ui.label("API token");
+                ui.add(egui::TextEdit::singleline(&mut self.token).password(true).desired_width(220.0));
+                ui.hyperlink_to("Get one", TOKENS_PAGE);
+            });
+        });
+        ui.label(egui::RichText::new("Foliolum keeps the token only until you close this tab.").small());
     }
 
     fn done(&mut self, ui: &mut egui::Ui, outcome: &Outcome) {
@@ -436,6 +602,56 @@ mod tests {
         assert!(explain(401, "").contains("token"));
         assert!(explain(400, r#"{"message":"Invalid email"}"#).contains("Invalid email"));
         assert!(looks_like_email("a.b@c.org") && !looks_like_email("a b@c.org") && !looks_like_email("a@.org") && !looks_like_email("@c.org"));
+    }
+
+    #[test]
+    fn pkce_matches_the_rfc_example() {
+        // RFC 7636 appendix B.
+        let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
+        assert_eq!(challenge(verifier), "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+        assert_eq!(base64url(&[0xff; 32]).len(), 43);
+        assert_eq!(base64url(b"f"), "Zg");
+        assert_eq!(base64url(b"fo"), "Zm8");
+        assert_eq!(base64url(b"foo"), "Zm9v");
+    }
+
+    #[test]
+    fn the_sign_in_address_and_reply() {
+        let url = authorize_url("abc", "s1");
+        assert_eq!(
+            url,
+            "https://sign.tdpdf.com/connect/tdpdf?code_challenge=abc&state=s1&redirect_uri=https%3A%2F%2Fapp.foliolum.app%2Fsign%2Fcallback"
+        );
+        assert_eq!(read_callback("?code=c1&state=s1", "s1"), Ok("c1".into()));
+        assert!(read_callback("?code=c1&state=other", "s1").unwrap_err().contains("wasn't for this window"));
+        assert!(read_callback("?error=access_denied&state=s1", "s1").unwrap_err().contains("cancelled"));
+        assert!(read_callback("?state=s1", "s1").is_err());
+        assert_eq!(read_token(200, r#"{"token":"api_x"}"#), Ok("api_x".into()));
+        assert!(read_token(400, r#"{"error":"invalid_grant"}"#).unwrap_err().contains("expired"));
+        assert!(read_token(200, "{}").is_err());
+    }
+
+    #[test]
+    fn a_sign_in_fills_the_token_and_a_cancelled_one_is_ignored() {
+        let mut d = Dialog::default();
+        d.start_sign_in();
+        let first = d.take_sign_in().unwrap();
+        assert_eq!(d.take_sign_in(), None, "taken once");
+        d.sign_in = SignIn::Idle; // Cancel
+        *d.sign_in_slot().lock().unwrap() = Some((first, Ok("late".into())));
+        d.pick_up_sign_in();
+        assert!(d.token.is_empty() && !d.signed_in);
+        d.start_sign_in();
+        let second = d.take_sign_in().unwrap();
+        *d.sign_in_slot().lock().unwrap() = Some((second, Ok("api_ok".into())));
+        d.pick_up_sign_in();
+        assert_eq!(d.token, "api_ok");
+        assert!(d.signed_in && d.sign_in == SignIn::Idle);
+        d.start_sign_in();
+        let third = d.take_sign_in().unwrap();
+        *d.sign_in_slot().lock().unwrap() = Some((third, Err("nope".into())));
+        d.pick_up_sign_in();
+        assert_eq!(d.sign_in, SignIn::Failed("nope".into()));
     }
 
     #[test]
