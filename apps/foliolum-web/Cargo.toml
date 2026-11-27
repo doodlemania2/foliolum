@@ -40,4 +40,6 @@ js-sys = "0.3"
 web-sys = { version = "0.3", features = ["Event", "EventTarget", "Window", "Document", "Element", "HtmlElement", "HtmlCanvasElement", "HtmlAnchorElement", "Blob", "BlobPropertyBag", "Url", "Location", "CssStyleDeclaration", "Response", "Request", "RequestInit", "RequestMode", "Headers", "FormData", "HtmlInputElement", "FileList", "File", "Storage"] }
 
 [dev-dependencies]
+# The bundled fonts compiled in, so tests measure text as the app draws it.
+foliolum-fonts = { workspace = true, features = ["embed"] }
 designcraft-geom = { workspace = true }

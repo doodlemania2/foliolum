@@ -73,6 +73,13 @@ light brightness, never in High Contrast. Foliolum sets its quill and rubric red
 tokens are built in one place (`Tokens::for_brightness`) that an embedder can't reach. Drop it if upstream
 gains a theme hook.
 
+### 0007-ui-embedder-start-section
+
+`crates/ui-egui`: `start_section` on the brand, a function that draws the app's own part of the start
+screen after Recent files and before the page sizes. Foliolum draws its parish templates there
+(`apps/foliolum-web/src/starters.rs`). DesignCraft's own brand has none, so nothing changes for it. Drop
+it if upstream gains a templates or start-screen hook.
+
 ## Upstream test baseline
 
 At pin `ff1cb44` these DesignCraft UI tests already fail on macOS without any of our patches

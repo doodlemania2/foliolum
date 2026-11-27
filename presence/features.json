@@ -83,6 +83,19 @@
       "sources": [
         "apps/foliolum-web/src/copyfit.rs"
       ]
+    },
+    {
+      "id": "parish-templates",
+      "name": "Parish templates",
+      "status": "building",
+      "summary": "Ready-made bulletin, flyer, sign-up sheet and newsletter that open with your parish's details filled in.",
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "apps/foliolum-web/src/starters.rs",
+        "fork/patches/0007-ui-embedder-start-section.patch"
+      ]
     }
   ]
 }
