@@ -35,6 +35,8 @@ Every open returns:
 - Groups, nested too, with their rotation.
 - Pictures as stored: PNG, JPEG, TIFF and bitmaps (DIB) with rectangular crops; WMF and EMF
   pictures as vector SVG.
+- Text wrap around pictures: square, at the picture's wrap distances (`pub-format/text-wrap.md`).
+  Other wrap styles, and wrap around shapes and text boxes, are not read.
 - WordArt as editable text with its font, style, alignment and letter fill and line. The default
   upward arch follows its curved path; other warps come over straight.
 - Tables with their row and column sizes, merged cells, cell text, cell fills, cell borders

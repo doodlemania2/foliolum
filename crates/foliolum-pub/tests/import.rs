@@ -172,6 +172,24 @@ fn wmf_pictures_import_as_vector_svg() {
     assert!(svg.contains("fill=\"#ff0000\"") && svg.contains("fill=\"#0000ff\""), "{svg}");
 }
 
+/// A picture with no wrap key (0x04) has Publisher's default, square wrap, at the drawing's distances
+/// (2.88 pt here, none being stored); with key 0x04 = 3, as on text boxes, nothing wraps
+/// (`text-wrap.md`).
+#[test]
+fn pictures_wrap_text_square_unless_their_record_says_otherwise() {
+    use designcraft_doc::WrapMode;
+    let picture = |bytes: Vec<u8>| {
+        let d = import_pub(&bytes).unwrap().document;
+        items(&d).into_iter().find(|i| !i.is_text_frame()).unwrap().wrap.clone()
+    };
+    let wrap = picture(support::wmf_picture());
+    assert_eq!(wrap.mode, WrapMode::BoundingBox);
+    assert!(wrap.offsets.iter().all(|o| (o - 2.88).abs() < 1e-9), "{:?}", wrap.offsets);
+    assert_eq!(picture(support::wmf_picture_with(vec![0x04, 0x10, 3, 0])).mode, WrapMode::None);
+    let text = items(&import_pub(&support::wmf_picture()).unwrap().document).into_iter().find(|i| i.is_text_frame()).unwrap().wrap.mode;
+    assert_eq!(text, WrapMode::None, "text boxes don't wrap");
+}
+
 /// Regenerates `tests/data/wmf-picture.pub` from `support::wmf_picture`.
 #[test]
 #[ignore = "writes tests/data/wmf-picture.pub"]

@@ -11,6 +11,7 @@ What the importer does and does not support is in [../publisher-import.md](../pu
 | `property-lists.md` | The key/kind/data encoding that the `Contents` stream and the Quill text store share. |
 | `contents-stream.md` | The `Contents` stream: header, record directory, document, pages and masters, objects, palette, colour references. |
 | `tables.md` | Table dimensions, cell rectangles and merges, `TCD ` cell text, cell fills, borders, margins and vertical alignment; what stays unconfirmed. |
+| `text-wrap.md` | Which objects text wraps around: `Contents` key 0x04 and the drawing's wrap distances. |
 | `font-metrics.md` | How Publisher spaces lines and places a frame's first line: by the requested font's Windows metrics, with the table of fonts the importer knows. |
 | `borderart.md` | BorderArt: the type-0x46 table of picture borders, its eight places and pieces, and which frame uses which. |
 | `text-store.md` | The Quill text store: section directory, text, story ids and lengths, fonts, text colours, default styles, character and paragraph runs. |
