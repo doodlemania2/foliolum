@@ -68,7 +68,7 @@ mod tests {
     fn only_publisher_files_are_taken_from_the_inbox() {
         use designcraft_ui_egui::ImportRequest;
         let file = |name: &str, bytes: &[u8]| ImportedFile {
-            request: ImportRequest { purpose: "drop".into(), target: None },
+            request: ImportRequest { purpose: "drop".into(), target: None, wanted: Vec::new() },
             name: name.into(),
             bytes: bytes.to_vec(),
         };

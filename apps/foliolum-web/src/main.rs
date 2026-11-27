@@ -30,6 +30,10 @@ mod pub_open;
 
 #[cfg(any(target_arch = "wasm32", test))]
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod prefs_store;
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 mod sign;
 
 #[cfg(target_arch = "wasm32")]

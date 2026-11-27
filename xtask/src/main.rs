@@ -20,6 +20,7 @@
 //! `$FOLIOLUM_NODE`).
 //!
 //!   cargo xtask synth [--count N] [--seed S] OUT
+//!   cargo xtask demo OUT
 //!
 //! `synth` writes the stress set (synth.rs): N synthetic publications (default 50, seed 1) made by
 //! our own writer, with a reference beside each in the layout-export shape, for `gate` to check.
@@ -59,6 +60,22 @@ fn main() -> ExitCode {
                 ExitCode::from(1)
             }
         },
+        Some("demo") => match args.free_from_str::<std::path::PathBuf>() {
+            Ok(out) => match std::fs::write(&out, synth::demo_bytes()) {
+                Ok(()) => {
+                    println!("demo bulletin in {}", out.display());
+                    std::process::ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("xtask demo: {}: {e}", out.display());
+                    std::process::ExitCode::FAILURE
+                }
+            },
+            Err(e) => {
+                eprintln!("usage: cargo xtask demo OUT ({e})");
+                std::process::ExitCode::FAILURE
+            }
+        },
         Some("synth") => match run_synth(args) {
             Ok(()) => ExitCode::SUCCESS,
             Err(e) => {
@@ -88,7 +105,7 @@ fn main() -> ExitCode {
         }
         _ => {
             eprintln!(
-                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH...\n       cargo xtask synth [--count N] [--seed S] OUT\n       cargo xtask review [--out DIR] [--verdicts FILE] [--refs DIR]... SET...\n       cargo xtask favicon"
+                "usage: cargo xtask gate [--set NAME] [--names] [--record] [--out DIR] [--verdicts FILE] [--system-fonts] [--no-review] PATH...\n       cargo xtask synth [--count N] [--seed S] OUT\n       cargo xtask demo OUT\n       cargo xtask review [--out DIR] [--verdicts FILE] [--refs DIR]... SET...\n       cargo xtask favicon"
             );
             ExitCode::from(1)
         }

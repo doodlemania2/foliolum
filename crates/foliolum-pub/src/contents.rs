@@ -16,6 +16,9 @@ pub(crate) struct ShapeInfo {
     pub text_id: Option<u32>,
     pub chain_index: u32,
     pub valign: Option<u32>,
+    /// Key 0x04: how text wraps around the object (`text-wrap.md`).
+    /// Absent on pictures that wrap (Publisher's default, square); 3 on text boxes, 0 on groups.
+    pub wrap: Option<u32>,
     pub is_table: bool,
     pub table: Option<crate::tables::TableInfo>,
     /// Key 0x09 (kind 0x18): the BorderArt drawn around the object, by its position in
@@ -140,6 +143,7 @@ fn parse_with_budget(b: &[u8], bytes: usize, items: usize) -> Result<Contents> {
                         text_id: number(&p, 0x27),
                         chain_index: number(&p, 0x28).unwrap_or(0),
                         valign: number(&p, 0x35),
+                        wrap: p.iter().find(|v| v.key == 0x04 && v.kind == 0x10).and_then(|v| v.number()),
                         is_table: ty == 0x10,
                         table,
                         border_art: p.iter().find(|v| v.key == 0x09 && v.kind == 0x18).and_then(|v| v.number()),

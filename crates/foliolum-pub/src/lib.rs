@@ -26,7 +26,7 @@
 //! score imports, never to infer format encoding.
 //!
 //! ## Not supported yet
-//! Table cell border dash styles; non-default WordArt warps and exact
+//! Text wrap other than square around pictures (`text-wrap.md`); table cell border dash styles; non-default WordArt warps and exact
 //! stretching (default upward arch uses measured editable path text; other warps stay straight),
 //! pattern/texture fills (approximated by the fill colour), picture crops
 //! other than rectangular, PICT pictures (an empty graphic frame keeps their place), custom tab stops,
@@ -457,6 +457,9 @@ impl<'a> Builder<'a> {
             let mut item = Item::new(id, self.layer, shape_kind, path.clone());
             if let Some(pib) = picture.filter(|_| !follower) {
                 item.content = self.picture_content(pib, rect, sh);
+                if matches!(item.content, Content::Graphic(_)) && info.wrap.is_none() {
+                    item.wrap = self.square_wrap(sh);
+                }
             }
             self.doc.insert_item(r, item, None).map_err(|e| PubError::Malformed(e.to_string()))?;
             id
@@ -1018,6 +1021,21 @@ impl<'a> Builder<'a> {
         item.stroke = Stroke::none();
         item.xf = xf;
         self.doc.insert_item(r, item, None).ok().map(|_| b)
+    }
+
+    /// Square wrap around a picture (text-wrap.md): its frame's box, at the distances its drawing
+    /// properties give (dxWrapDistLeft 0x0384, dyWrapDistTop 0x0385, dxWrapDistRight 0x0386,
+    /// dyWrapDistBottom 0x0387, EMU), else the drawing's defaults, else 2.88 pt.
+    fn square_wrap(&self, sh: &escher::EShape) -> designcraft_doc::TextWrap {
+        let distance = |k: u16| {
+            let emu = sh.prop(k).or_else(|| self.dr.shapes.iter().find(|d| d.seq.is_none() && d.props.contains_key(&k)).and_then(|d| d.prop(k)));
+            f64::from(emu.unwrap_or(36_576) as i32).max(0.0) / 12_700.0
+        };
+        designcraft_doc::TextWrap {
+            mode: designcraft_doc::WrapMode::BoundingBox,
+            offsets: [distance(0x0385), distance(0x0384), distance(0x0387), distance(0x0386)],
+            ..Default::default()
+        }
     }
 
     fn picture_content(&mut self, pib: u32, frame: Rect, sh: &escher::EShape) -> Content {

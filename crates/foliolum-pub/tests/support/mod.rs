@@ -258,6 +258,12 @@ fn wmf() -> Vec<u8> {
 /// [`hello`] with its rectangle replaced by a picture frame holding [`wmf`], stored compressed
 /// in the drawing's picture store (MS-ODRAW OfficeArtBlipWMF in an OfficeArtFBSE).
 pub fn wmf_picture() -> Vec<u8> {
+    wmf_picture_with(Vec::new())
+}
+
+/// [`wmf_picture`] with `properties` in the picture's `Contents` object record (for example key 0x04,
+/// its wrap: `text-wrap.md`).
+pub fn wmf_picture_with(properties: Vec<u8>) -> Vec<u8> {
     let wmf = wmf();
     let packed = miniz_oxide::deflate::compress_to_vec_zlib(&wmf, 9);
     let mut blip = vec![0u8; 16]; // UID
@@ -278,6 +284,6 @@ pub fn wmf_picture() -> Vec<u8> {
     let mut dgg = rec(0, 0, 0xF006, &[0u8; 16]);
     dgg.extend(rec(0xF, 1, 0xF001, &rec(2, 3, 0xF007, &bse)));
     let picture = shape(75, 1026, &[(0x4104, 1)], [72, 216, 216, 144], 259);
-    let objects = [text_object(), Object { record_type: 0x01, properties: Vec::new() }];
+    let objects = [text_object(), Object { record_type: 0x01, properties }];
     compound(&contents(emu(PAGE_W) as u32, emu(PAGE_H) as u32, &objects), &quill(&[], &[], HELLO_TEXT), &escher(Some(&dgg), &[text_shape(), picture]))
 }

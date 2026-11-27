@@ -735,9 +735,175 @@ pub fn write_set(out: &Path, count: usize, seed: u64) -> Result<(), String> {
     Ok(())
 }
 
+/// The demo bulletin (`cargo xtask demo OUT`): an invented parish bulletin, two Letter pages, for the
+/// app's `?demo=bulletin` and the guides' screenshots and videos. Every name in it is made up, it has
+/// no email addresses, and its one phone number is in the fictional 555-01xx range. Its second page
+/// marks a signature and a date for Send for signature (`{{signature, r1}}`).
+fn demo_plan() -> Plan {
+    const RUBRIC: usize = 0;
+    const INK: usize = 1;
+    const GEORGIA: usize = 4;
+    const GARAMOND: usize = 5;
+    let (width, height, margin) = (612.0, 792.0, 36.0);
+    let text = |t: &str, font: usize, size: f64| plain(t.to_string(), font, size);
+    let para = |runs: Vec<Run>, align: u32, space_after: f64| Para { runs, align, bullet: false, space_after };
+    let bold = |mut r: Run| {
+        r.bold = true;
+        r
+    };
+    let italic = |mut r: Run| {
+        r.italic = true;
+        r
+    };
+    let colored = |mut r: Run, c: usize| {
+        r.color = Some(c);
+        r
+    };
+    let heading = |t: &str| para(vec![colored(bold(text(t, GEORGIA, 14.0)), RUBRIC)], 0, 6.0);
+    let line = |t: &str| para(vec![text(t, GARAMOND, 12.0)], 0, 3.0);
+    let bullets = |items: &[&str]| -> Vec<Para> {
+        items.iter().map(|t| Para { runs: vec![text(t, GARAMOND, 12.0)], align: 0, bullet: true, space_after: 4.0 }).collect()
+    };
+    let mut stories: Vec<Story> = Vec::new();
+    let mut add = |paras: Vec<Para>| {
+        stories.push(Story { id: 0, paras });
+        stories.len() - 1
+    };
+    let tb = |rect: [f64; 4], story: usize| Object { rect, kind: Kind::Text { story, link: 0 } };
+    let fill = |rect: [f64; 4], fill: u32| Object { rect, kind: Kind::Shape { kind: 1, fill, line: None } };
+
+    let footer =
+        add(vec![para(vec![italic(text("St. Example Parish · 100 Example Road, Sampletown · Parish office 555-0142", GEORGIA, 9.0))], 2, 0.0)]);
+    let master = vec![
+        fill([margin, height - margin - 22.0, width - 2.0 * margin, 1.5], 0xB3322A),
+        tb([margin, height - margin - 18.0, width - 2.0 * margin, 18.0], footer),
+    ];
+
+    let title = add(vec![para(vec![colored(bold(text("St. Example Parish", GARAMOND, 36.0)), RUBRIC)], 2, 0.0)]);
+    let subtitle = add(vec![para(vec![colored(italic(text("Weekly Bulletin · Third Sunday of Advent", GEORGIA, 14.0)), INK)], 2, 0.0)]);
+    let masses = add(std::iter::once(heading("Mass Times"))
+        .chain(
+            ["Saturday Vigil: 5:00 pm", "Sunday: 8:00 am and 10:30 am", "Weekdays: 8:00 am", "Confession: Saturday, 3:30 to 4:30 pm"]
+                .iter()
+                .map(|t| line(t)),
+        )
+        .collect());
+    let pastor = add(vec![
+        heading("From the Pastor"),
+        para(
+            vec![text(
+                "Dear friends, Advent asks us to slow down and make room. This week, take ten quiet minutes each evening, light a candle at the table, and read the coming Sunday's Gospel together as a family.",
+                GARAMOND,
+                12.0,
+            )],
+            6,
+            6.0,
+        ),
+        para(vec![text("Thank you to everyone who brought gifts for the Giving Tree. Every tag was taken in four days.", GARAMOND, 12.0)], 6, 6.0),
+        para(vec![italic(text("Fr. Alex Example", GARAMOND, 12.0))], 1, 0.0),
+    ]);
+    let week = add(std::iter::once(heading("This Week"))
+        .chain(bullets(&[
+            "Tuesday, 7:00 pm: Choir rehearsal in the church",
+            "Wednesday, 6:30 pm: Advent soup supper in the hall",
+            "Friday, 9:00 am: Rosary group",
+            "Saturday, 10:00 am: Greening of the church; all hands welcome",
+        ]))
+        .collect());
+
+    let prayers = add(vec![
+        heading("Please Pray For"),
+        para(
+            vec![text(
+                "Sam Sample, Jo Placeholder, Pat Example and all who are ill or homebound, and for those who have died, especially Lee Specimen.",
+                GARAMOND,
+                12.0,
+            )],
+            6,
+            0.0,
+        ),
+    ]);
+    let life = add(vec![para(vec![colored(bold(text("Parish Life", GARAMOND, 30.0)), RUBRIC)], 0, 0.0)]);
+    let events = add(std::iter::once(heading("Coming Up"))
+        .chain(bullets(&[
+            "December 20: Christmas pageant rehearsal, 2:00 pm",
+            "December 24: Children's Mass, 4:00 pm; Midnight Mass, 12:00 am",
+            "January 6: Epiphany potluck after the 10:30 Mass",
+            "January 11: Baptism preparation class, 7:00 pm",
+        ]))
+        .collect());
+    let welcome = add(vec![
+        heading("New to St. Example?"),
+        para(
+            vec![text(
+                "Welcome! Fill in a registration card at the back of the church, or stop by the parish office. We would love to meet you.",
+                GARAMOND,
+                12.0,
+            )],
+            6,
+            0.0,
+        ),
+    ]);
+    let signup = add(vec![
+        heading("Pageant Volunteer Form"),
+        line("I'd like to help with the Christmas pageant on December 20."),
+        line("Name: {{name, r1}}"),
+        line("Signature: {{signature, r1}}"),
+        line("Date: {{date, r1}}"),
+    ]);
+
+    let col = (width - 2.0 * margin - 24.0) / 2.0;
+    let right = margin + col + 24.0;
+    let page1 = vec![
+        tb([margin, margin, width - 2.0 * margin, 48.0], title),
+        tb([margin, margin + 50.0, width - 2.0 * margin, 22.0], subtitle),
+        fill([margin, margin + 80.0, width - 2.0 * margin, 2.0], 0xB3322A),
+        tb([margin, 140.0, col, 150.0], masses),
+        tb([right, 140.0, col, 300.0], pastor),
+        fill([margin, 330.0, width - 2.0 * margin, 150.0], 0xF3EEE3),
+        tb([margin + 12.0, 342.0, width - 2.0 * margin - 24.0, 126.0], week),
+        tb([margin, 510.0, width - 2.0 * margin, 90.0], prayers),
+    ];
+    let page2 = vec![
+        tb([margin, margin, width - 2.0 * margin, 44.0], life),
+        fill([margin, margin + 48.0, width - 2.0 * margin, 2.0], 0xB3322A),
+        tb([margin, 110.0, col, 220.0], events),
+        tb([right, 110.0, col, 160.0], welcome),
+        fill([margin, 290.0, width - 2.0 * margin, 150.0], 0xF3EEE3),
+        tb([margin + 12.0, 302.0, width - 2.0 * margin - 24.0, 126.0], signup),
+    ];
+    for (i, s) in stories.iter_mut().enumerate() {
+        s.id = i as u32 + 2;
+    }
+    Plan { width, height, pages: vec![page1, page2], master: Some(master), stories, pictures: Vec::new(), colors: vec![0xB3322A, 0x1F2430] }
+}
+
+/// The demo bulletin's bytes ([`demo_plan`]).
+pub fn demo_bytes() -> Vec<u8> {
+    let p = demo_plan();
+    compound(&contents(&p), &quill(&p), &escher(&p))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The copy the web app ships (`apps/foliolum-web/demo/bulletin.pub`) is what the writer makes now:
+    /// rerun `cargo xtask demo apps/foliolum-web/demo/bulletin.pub` after changing it.
+    #[test]
+    fn the_shipped_demo_bulletin_is_current_and_imports() {
+        let bytes = demo_bytes();
+        let shipped = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../apps/foliolum-web/demo/bulletin.pub")).expect("shipped demo");
+        assert!(shipped == bytes, "apps/foliolum-web/demo/bulletin.pub is stale");
+        let imported = foliolum_pub::import_pub(&bytes).expect("demo imports");
+        assert_eq!(imported.document.page_count(), 2);
+        let text: String = imported.document.stories.values().map(|s| s.text.clone()).collect::<Vec<_>>().join("\n");
+        assert!(text.contains("St. Example Parish") && text.contains("{{signature, r1}}"));
+        assert!(!text.contains('@'), "no email addresses");
+        for (i, _) in text.match_indices("555-") {
+            assert!(text[i + 4..].starts_with("01"), "phone numbers stay in 555-01xx");
+        }
+    }
 
     #[test]
     fn the_set_is_the_same_every_time() {
