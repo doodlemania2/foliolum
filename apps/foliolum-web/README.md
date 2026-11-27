@@ -78,6 +78,25 @@ holding sample rows. The tests build each template with the bundled fonts and ch
 overflows and that it exports. To look at them:
 `FOLIOLUM_STARTERS_OUT=<dir> cargo test -p foliolum-web write_template_pdfs -- --ignored`.
 
+## Your parish: sign-in, shared templates and proofreading (#60)
+
+- **Signing in** (`src/account.rs`, `src/account_web.rs`) goes through Claviger, the fleet's sign-in
+  service: OIDC client `foliolum-app`, PKCE, no secret. A popup opens Claviger's page, which sends it
+  back to `/auth/callback` (`auth/callback.html`, which reuses `sign/callback.js` on its own
+  channel). That page passes the answer to the editor tab over a same-origin BroadcastChannel and
+  closes, so it never depends on `window.opener` (Claviger's pages send COOP), and the editor tab
+  never navigates away from an open document. Claviger's page signs people in but doesn't make
+  accounts, so Create an account posts to Claviger's `foliolum_users` collection first. The ID
+  token is kept in memory. The refresh token is kept in local storage (`foliolum.session`) so a
+  reload stays signed in.
+- **Parishes and shared templates** live in Foliolum's backend (`services/foliolum-api`, at `/api/`).
+  Whoever starts a parish is its admin and makes invite links (`?invite=…`). File > Share with
+  parish saves the open document to the parish, and the start screen lists the parish's templates
+  under the starter cards. Opening one opens a copy.
+- **Home > Proofread** (`src/proofread.rs`) sends the selected text box's story to the backend, which
+  asks the fleet's AI relay. Each suggestion is applied by hand, one undo step each, and only if its
+  words are still there.
+
 ## Send for signature
 
 File ▸ Send for signature sends the open document, as a PDF, to TDPdf Sign (https://sign.tdpdf.com),

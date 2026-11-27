@@ -96,6 +96,34 @@
         "apps/foliolum-web/src/starters.rs",
         "fork/patches/0007-ui-embedder-start-section.patch"
       ]
+    },
+    {
+      "id": "parish-sharing",
+      "name": "Share templates with your parish",
+      "status": "building",
+      "summary": "Sign in, start or join your parish with an invite link, and open the templates everyone in it shares.",
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "apps/foliolum-web/src/account.rs",
+        "apps/foliolum-web/src/account_web.rs",
+        "services/foliolum-api/src/lib.rs",
+        "services/foliolum-api/src/store.rs"
+      ]
+    },
+    {
+      "id": "ai-proofreading",
+      "name": "Proofread",
+      "status": "building",
+      "summary": "Checks a text box for spelling, grammar and punctuation, and lets you apply each fix one at a time.",
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "apps/foliolum-web/src/proofread.rs",
+        "services/foliolum-api/src/proofread.rs"
+      ]
     }
   ]
 }

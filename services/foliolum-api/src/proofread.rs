@@ -44,7 +44,7 @@ pub trait Ai: Send + Sync + 'static {
     fn complete(&self, system: &str, user: &str) -> impl Future<Output = Result<String, AiError>> + Send;
 }
 
-/// The fleet's LLM relay (OpenAI-compatible chat completions).
+/// The fleet's LLM relay (a chat-completions API).
 pub struct Relay {
     url: String,
     key: String,

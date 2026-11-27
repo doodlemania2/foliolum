@@ -37,24 +37,7 @@ pub const REDIRECT: &str = "https://app.foliolum.app/sign/callback";
 /// The same-origin channel the callback page posts its query on.
 pub const CHANNEL: &str = "foliolum-sign-in";
 
-/// base64url without padding (RFC 4648 §5), as PKCE wants it.
-pub fn base64url(bytes: &[u8]) -> String {
-    const A: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
-    let mut out = String::with_capacity(bytes.len() * 4 / 3 + 2);
-    for c in bytes.chunks(3) {
-        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
-        for i in 0..=c.len() {
-            out.push(A[(n >> (18 - 6 * i) & 63) as usize] as char);
-        }
-    }
-    out
-}
-
-/// The S256 challenge for a PKCE `verifier`.
-pub fn challenge(verifier: &str) -> String {
-    use sha2::Digest as _;
-    base64url(&sha2::Sha256::digest(verifier.as_bytes()))
-}
+pub use crate::pkce::{base64url, challenge};
 
 /// The connect page's address for one sign-in.
 pub fn authorize_url(challenge: &str, state: &str) -> String {
