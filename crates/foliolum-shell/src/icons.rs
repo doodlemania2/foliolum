@@ -18,6 +18,9 @@ pub const NAMES: &[&str] = &[
     "fo-picture",
     "fo-booklet",
     "fo-sign",
+    "fo-smart",
+    "fo-profile",
+    "fo-fit",
     "fo-undo",
     "fo-redo",
     "fo-copy",
@@ -134,6 +137,34 @@ pub fn paint(p: &Painter, r: Rect, name: &str, c: Color32) -> bool {
             pen.line(&[(11.0, 18.0), (3.0, 18.0), (3.0, 3.0), (13.0, 3.0), (13.0, 7.0)]);
             pen.line(&[(5.0, 15.0), (10.0, 15.0)]);
             pen.closed(&[(18.5, 6.5), (16.5, 4.5), (9.5, 11.5), (9.0, 14.0), (11.5, 13.5)]);
+        }
+        // A text box holding a small table.
+        "fo-smart" => {
+            pen.rect(2.5, 3.0, 17.5, 17.0);
+            pen.line(&[(5.0, 7.0), (15.0, 7.0)]);
+            pen.line(&[(5.0, 10.5), (15.0, 10.5)]);
+            pen.line(&[(5.0, 14.0), (15.0, 14.0)]);
+            pen.line(&[(9.0, 7.0), (9.0, 14.0)]);
+        }
+        // A card: a round badge beside lines of an address.
+        "fo-profile" => {
+            pen.rect(2.0, 4.0, 18.0, 16.0);
+            pen.circle(6.5, 9.0, 2.0);
+            pen.line(&[(4.0, 13.5), (9.0, 13.5)]);
+            pen.line(&[(11.0, 8.0), (16.0, 8.0)]);
+            pen.line(&[(11.0, 11.0), (16.0, 11.0)]);
+            pen.line(&[(11.0, 14.0), (14.5, 14.0)]);
+        }
+        // Lines of text inside a box, with arrows pressing in from both sides.
+        "fo-fit" => {
+            pen.rect(5.0, 3.0, 15.0, 17.0);
+            pen.line(&[(7.0, 7.0), (13.0, 7.0)]);
+            pen.line(&[(7.0, 10.0), (13.0, 10.0)]);
+            pen.line(&[(7.0, 13.0), (11.5, 13.0)]);
+            pen.line(&[(0.5, 10.0), (3.5, 10.0)]);
+            pen.line(&[(2.0, 8.5), (3.5, 10.0), (2.0, 11.5)]);
+            pen.line(&[(19.5, 10.0), (16.5, 10.0)]);
+            pen.line(&[(18.0, 8.5), (16.5, 10.0), (18.0, 11.5)]);
         }
         // A path that turns back on itself, ending in an arrowhead pointing left.
         "fo-undo" | "fo-redo" => {

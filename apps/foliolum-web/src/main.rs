@@ -36,6 +36,22 @@ mod prefs_store;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 mod sign;
 
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod smart;
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod profile;
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod copyfit;
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod undo;
+
 #[cfg(target_arch = "wasm32")]
 mod sign_web;
 

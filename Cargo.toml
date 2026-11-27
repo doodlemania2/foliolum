@@ -27,6 +27,7 @@ designcraft-fonts = { path = "upstream/designcraft/crates/fonts" }
 designcraft-engine = { path = "upstream/designcraft/crates/engine" }
 designcraft-format = { path = "upstream/designcraft/crates/format" }
 designcraft-ui-egui = { path = "upstream/designcraft/crates/ui-egui", default-features = false }
+designcraft-textimport = { path = "upstream/designcraft/crates/textimport" }
 designcraft-render = { path = "upstream/designcraft/crates/render" }
 designcraft-tools = { path = "upstream/designcraft/crates/tools" }
 # Ours.

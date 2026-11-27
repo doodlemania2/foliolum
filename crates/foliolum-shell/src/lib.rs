@@ -99,6 +99,8 @@ fn enabled(app: &DesignApp, b: &Button) -> bool {
     match b.action {
         Action::Menu(id, _) => designcraft_ui_egui::menus::menu_enabled(app, id),
         Action::Tool(_) => true,
+        // Our details is for any time; the others work on the open document.
+        Action::App("profile") => APP_ACTIONS.get().is_some(),
         Action::App(_) => APP_ACTIONS.get().is_some() && app.session.active().is_some(),
     }
 }

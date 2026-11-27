@@ -47,6 +47,42 @@
         "apps/foliolum-web/src/sign_web.rs",
         "crates/foliolum-shell/src/tables.rs"
       ]
+    },
+    {
+      "id": "smart-frames",
+      "name": "Smart frames",
+      "status": "building",
+      "summary": "A text box that fills itself from a table of data: typed in, or loaded from a spreadsheet.",
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "apps/foliolum-web/src/smart.rs"
+      ]
+    },
+    {
+      "id": "organization-profile",
+      "name": "Our details",
+      "status": "building",
+      "summary": "Your organization's name, address, phone, email and website, typed once and inserted anywhere.",
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "apps/foliolum-web/src/profile.rs"
+      ]
+    },
+    {
+      "id": "copyfit",
+      "name": "Make it fit",
+      "status": "building",
+      "summary": "Fits overflowing text to its box by tightening it slightly, without changing a word.",
+      "audiences": [
+        "member"
+      ],
+      "sources": [
+        "apps/foliolum-web/src/copyfit.rs"
+      ]
     }
   ]
 }

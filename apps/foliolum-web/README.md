@@ -53,6 +53,21 @@ On the shared m4: `nice -n 15 env CARGO_BUILD_JOBS=4 trunk build` (about 5 minut
   and Arial files export PDFs set in Tinos and Arimo, including one dropped while the fonts were held
   back 8 seconds.
 
+## Phase 2 tools (Insert and Home tabs)
+
+- **Smart frame** (`src/smart.rs`, #52): select a text box and choose Insert > Smart frame. Type the
+  data into a grid, or load a CSV or .xlsx file. The box shows it as a table or as one line per row
+  from a pattern such as `{Day}  {Time}  {Intention}`. The data travels in the frame's label, so
+  opening the dialog on the box again edits it.
+- **Our details** (`src/profile.rs`, #53): name, address, phone, email and website, kept in this
+  browser (local storage key `foliolum.profile`). Each detail goes in as a text variable, and saving
+  the profile updates every one the document uses.
+- **Make it fit** (`src/copyfit.rs`, #54): Home > Make it fit tightens the selected box's tracking
+  (by up to 25/1000 em), then its size and fixed leading (by up to 2 pt), until the text fits. If it
+  can't fit within those limits, nothing changes.
+
+Each is one undo step (`src/undo.rs`).
+
 ## Send for signature
 
 File ▸ Send for signature sends the open document, as a PDF, to TDPdf Sign (https://sign.tdpdf.com),

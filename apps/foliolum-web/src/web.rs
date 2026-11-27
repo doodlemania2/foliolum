@@ -103,6 +103,8 @@ pub fn start() {
                         graphics: creator_graphics,
                         held: Vec::new(),
                         sign: Default::default(),
+                        smart: Default::default(),
+                        profile: Default::default(),
                     }))
                 }),
             )
@@ -412,21 +414,99 @@ struct WebShell {
     held: Vec<ImportedFile>,
     /// Send for signature ([`crate::sign`]).
     sign: crate::sign::Dialog,
+    /// Smart frames ([`crate::smart`]).
+    smart: crate::smart::Dialog,
+    /// Our details ([`crate::profile`]).
+    profile: crate::profile::Dialog,
     /// Writes the preferences to local storage when they change.
     prefs_sync: PrefsSync,
 }
 
 /// The ribbon's buttons for things outside DesignCraft ([`foliolum_shell::set_app_actions`]).
-fn app_action(_: &mut DesignApp, id: &str) {
-    if id == "sign" {
-        SIGN_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed);
+fn app_action(app: &mut DesignApp, id: &str) {
+    match id {
+        "sign" => SIGN_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
+        "smart" => SMART_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
+        "profile" => PROFILE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
+        "copyfit" => {
+            let message = match crate::smart::selected_frame(&app.session) {
+                Some(id) => crate::copyfit::fit(&mut app.session, id).map(crate::copyfit::Outcome::message).unwrap_or_else(|e| e),
+                None => "Select the text box whose text overflows, then choose Make it fit.".to_string(),
+            };
+            app.status(message);
+        }
+        _ => {}
     }
 }
+
+/// Our details was pressed; the shell opens its dialog on the next frame.
+static PROFILE_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Smart frame was pressed; the shell opens its dialog on the next frame.
+static SMART_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Send for signature was pressed; the shell opens its dialog on the next frame.
 static SIGN_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 impl WebShell {
+    fn profile_dialog(&mut self, ctx: &egui::Context) {
+        if PROFILE_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            let stored = local_storage().and_then(|s| s.get_item(crate::profile::STORAGE_KEY).ok().flatten());
+            self.profile.profile = crate::profile::Profile::decode(stored.as_deref());
+            self.profile.set_message(String::new());
+            self.profile.open = true;
+        }
+        let (p, insert) = match self.profile.show(ctx) {
+            Some(crate::profile::Want::Save(p)) => (p, None),
+            Some(crate::profile::Want::Insert(p, i)) => (p, Some(i)),
+            None => return,
+        };
+        let kept =
+            serde_json::to_string(&p).ok().zip(local_storage()).is_some_and(|(json, s)| s.set_item(crate::profile::STORAGE_KEY, &json).is_ok());
+        let result = match insert {
+            Some(i) => {
+                crate::profile::insert(&mut self.app.session, &p, i).map(|()| format!("Inserted {}.", crate::profile::FIELDS[i].0.to_lowercase()))
+            }
+            None => crate::profile::apply(&mut self.app.session, &p).map(|n| {
+                if n == 0 { "Saved.".to_string() } else { format!("Saved, and updated {n} field{} in this document.", if n == 1 { "" } else { "s" }) }
+            }),
+        };
+        let message = match result {
+            Ok(m) if kept => m,
+            Ok(m) => format!("{m} This browser couldn't keep the details for next time."),
+            Err(e) => e,
+        };
+        self.profile.set_message(message);
+    }
+
+    fn smart_dialog(&mut self, ctx: &egui::Context) {
+        if SMART_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            self.smart.open_for(&self.app.session);
+        }
+        match self.smart.show(ctx) {
+            Some(crate::smart::Want::Fill(id, binding)) => {
+                let status = match crate::smart::fill(&mut self.app.session, id, &binding) {
+                    Ok(()) => format!("Smart frame filled: {} rows", binding.data_rows().len()),
+                    Err(e) => e,
+                };
+                self.app.status(status);
+            }
+            Some(crate::smart::Want::PickFile) => {
+                let slot = self.smart.loaded_slot();
+                let ctx = ctx.clone();
+                wasm_bindgen_futures::spawn_local(async move {
+                    let picked = rfd::AsyncFileDialog::new().add_filter("Spreadsheet (CSV, Excel)", &["csv", "tsv", "txt", "xlsx"]).pick_file().await;
+                    if let Some(file) = picked {
+                        let bytes = file.read().await;
+                        *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some((file.file_name(), bytes));
+                        ctx.request_repaint();
+                    }
+                });
+            }
+            None => {}
+        }
+    }
+
     fn sign_dialog(&mut self, ctx: &egui::Context) {
         if SIGN_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
             let title = self.app.session.active().map(|d| d.title()).unwrap_or_default();
@@ -561,6 +641,8 @@ impl eframe::App for WebShell {
         let ctx = ui.ctx().clone();
         let graphics = self.graphics.clone();
         let _ = graphics.run_if_healthy(|| self.sign_dialog(&ctx));
+        let _ = graphics.run_if_healthy(|| self.smart_dialog(&ctx));
+        let _ = graphics.run_if_healthy(|| self.profile_dialog(&ctx));
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
