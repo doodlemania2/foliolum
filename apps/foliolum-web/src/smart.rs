@@ -322,6 +322,31 @@ mod tests {
         assert_eq!(d.doc.stories[&sid].text, "Saturday, 5:00 pm\nSunday, 10:30 am");
         assert_eq!(selected_frame(&s), Some(id));
     }
+
+    /// The dialog draws, with and without a selected box, and a loaded spreadsheet replaces the grid.
+    #[test]
+    fn the_dialog_draws_and_takes_a_loaded_spreadsheet() {
+        let (s, _) = session_with_frame();
+        let mut d = Dialog::default();
+        d.open_for(&s);
+        assert!(d.frame.is_none(), "frame.create leaves a text caret, not a selected box");
+        let (mut s, id) = session_with_frame();
+        s.execute("selection.set", &json!({"ids": [id.0]})).unwrap();
+        d.open_for(&s);
+        assert_eq!(d.frame, Some(id));
+        *d.loaded_slot().lock().unwrap() = Some(("m.csv".into(), b"A,B\n1,2\n".to_vec()));
+        let ctx = egui::Context::default();
+        for layout in [Layout::Table, Layout::Lines] {
+            d.binding.layout = layout;
+            let mut out = ctx.run_ui(Default::default(), |ui| {
+                let ctx = &ui.ctx().clone();
+                d.show(ctx);
+            });
+            out.textures_delta.clear();
+        }
+        assert_eq!(d.binding.rows, vec![vec!["A", "B"], vec!["1", "2"]]);
+        assert_eq!(d.binding.source, "m.csv");
+    }
 }
 
 /// Where a spreadsheet the page read waits for the dialog: (file name, bytes).

@@ -203,4 +203,17 @@ mod tests {
         assert_eq!(Profile::decode(Some("nonsense")), Profile::default());
         assert_eq!(Profile::decode(Some(r#"{"name":"Old"}"#)).name, "Old", "fields a stored copy lacks take defaults");
     }
+
+    #[test]
+    fn the_dialog_draws() {
+        let mut d = Dialog { open: true, ..Default::default() };
+        d.set_message("Saved.".into());
+        let ctx = egui::Context::default();
+        let mut out = ctx.run_ui(Default::default(), |ui| {
+            let ctx = &ui.ctx().clone();
+            assert!(d.show(ctx).is_none());
+        });
+        out.textures_delta.clear();
+        assert!(d.open);
+    }
 }
