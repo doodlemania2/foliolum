@@ -51,7 +51,7 @@
     {
       "id": "smart-frames",
       "name": "Smart frames",
-      "status": "building",
+      "status": "ready",
       "summary": "A text box that fills itself from a table of data: typed in, or loaded from a spreadsheet.",
       "audiences": [
         "member"
@@ -63,7 +63,7 @@
     {
       "id": "organization-profile",
       "name": "Our details",
-      "status": "building",
+      "status": "ready",
       "summary": "Your organization's name, address, phone, email and website, typed once and inserted anywhere.",
       "audiences": [
         "member"
@@ -75,7 +75,7 @@
     {
       "id": "copyfit",
       "name": "Make it fit",
-      "status": "building",
+      "status": "ready",
       "summary": "Fits overflowing text to its box by tightening it slightly, without changing a word.",
       "audiences": [
         "member"
@@ -87,7 +87,7 @@
     {
       "id": "parish-templates",
       "name": "Parish templates",
-      "status": "building",
+      "status": "ready",
       "summary": "Ready-made bulletin, flyer, sign-up sheet and newsletter that open with your parish's details filled in.",
       "audiences": [
         "member"
