@@ -4,8 +4,9 @@ Phase 1 is done when 50 real Publisher files open, render recognizably and expor
 recorded result per file. The design is in `docs/architecture.md`, "The Phase 1 gate".
 
 The real-world files are **dev22** (22) and **lobz** (33, below): 55 files people made in Publisher for
-their own use, and any contributed ones on top. No contributed files are expected, so these two public
-sets are what the 50 is counted over. pubsmith's 142 fixtures are made with Publisher too, but by a
+their own use, and any contributed ones on top. Derek decided (2026-11-26, #9) that these two public
+sets are the Phase 1 gate set: the 50 is counted over them, and real parish files join later as a
+contributed set. pubsmith's 142 fixtures are made with Publisher too, but by a
 script, one feature at a time; they test the importer against Publisher's own layout export and don't
 count toward the 50. The stress set is ours and doesn't count either.
 
