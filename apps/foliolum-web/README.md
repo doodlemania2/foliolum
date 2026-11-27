@@ -86,12 +86,17 @@ signer signs by typing `{{signature, r1}}` (r2 for the second signer, and so on;
 `{{name, r1}}` too) in a text box: Sign finds them in the PDF and puts fields there. When every signer has
 one, the document is sent at once; otherwise it is left as a draft in Sign to finish there.
 
-- The person pastes their own Sign API token. It is kept in memory only, until the tab closes. There is no
-  shared or service token.
+- The person signs in to Sign in a popup (#59), the PKCE connect flow the TDPdf app uses: Sign's
+  `/connect/tdpdf` page, where they pick a team and allow it, sends the popup back to
+  `https://app.foliolum.app/sign/callback` (`sign/callback.html` and `callback.js`). That page hands
+  the query to the editor tab on a same-origin `BroadcastChannel` and closes. The tab checks the state
+  and trades the code at `/api/connect/token` for the person's team API token. The popup keeps the
+  open document safe, because the editor tab never navigates away. Pasting a token made in Sign's
+  settings still works.
+- Either way the token is kept in memory only, until the tab closes. There is no shared or service token.
 - The browser calls Sign directly, so the CSP's `connect-src` names `https://sign.tdpdf.com`
-  (`deploy/image/prepare.sh`; the smoke test checks it).
-- Signing in to Sign from the browser (the PKCE flow TDPdf uses) needs Sign to accept
-  `https://app.foliolum.app` as a redirect, which it doesn't yet.
+  (`deploy/image/prepare.sh`; the smoke test checks it). Sign allows the callback address and CORS for
+  this origin on its token endpoint (doodlemania2/documenso#38).
 
 ## Not yet
 

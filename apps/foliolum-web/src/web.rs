@@ -521,7 +521,24 @@ impl WebShell {
             return;
         }
         let marks = self.app.session.doc().map(|d| crate::sign::document_marks(&d.doc)).unwrap_or_default();
-        let Some(mut request) = self.sign.show(ctx, &marks) else { return };
+        let request = self.sign.show(ctx, &marks);
+        if let Some(id) = self.sign.take_sign_in() {
+            let slot = self.sign.sign_in_slot();
+            // The popup opens now, in the frame that handled the click, so the browser still counts
+            // it as the person's own action; only the wait and the token exchange are async.
+            match crate::sign_web::begin_sign_in() {
+                Ok(pending) => {
+                    let ctx = ctx.clone();
+                    wasm_bindgen_futures::spawn_local(async move {
+                        let result = crate::sign_web::finish_sign_in(pending).await;
+                        *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some((id, result));
+                        ctx.request_repaint();
+                    });
+                }
+                Err(why) => *slot.lock().unwrap_or_else(|e| e.into_inner()) = Some((id, Err(why))),
+            }
+        }
+        let Some(mut request) = request else { return };
         let slot = self.sign.result_slot();
         let pdf = self.app.session.execute("file.exportPdf", &serde_json::json!({})).map_err(|e| e.to_string()).and_then(|r| {
             r["base64"].as_str().map(designcraft_engine::cmd::base64_decode).ok_or_else(|| "the PDF export returned nothing".to_string())
