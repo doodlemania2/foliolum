@@ -13,7 +13,7 @@ pub enum Action {
     /// Pick one of DesignCraft's tools (`designcraft_tools::TOOL_GROUPS` ids).
     Tool(&'static str),
     /// Something the app around the editor does (`crate::set_app_actions`), with an open document:
-    /// "sign" is Send for signature, "smart" the Smart frame dialog.
+    /// "sign" is Send for signature, "smart" the Smart frame dialog, "profile" Our details.
     App(&'static str),
 }
 
@@ -119,7 +119,13 @@ pub const TABS: &[Tab] = &[
                 buttons: &[tool("Rectangle", "rectangle", "tool-rect"), tool("Oval", "ellipse", "tool-ellipse"), tool("Line", "line", "tool-line")],
             },
             Group { caption: "Pages", buttons: &[menu("Page", "layout.pages.insert", Some("plus"))] },
-            Group { caption: "Data", buttons: &[Button { label: "Smart frame…", action: Action::App("smart"), icon: Some("fo-smart") }] },
+            Group {
+                caption: "Data",
+                buttons: &[
+                    Button { label: "Smart frame…", action: Action::App("smart"), icon: Some("fo-smart") },
+                    Button { label: "Our details…", action: Action::App("profile"), icon: Some("fo-profile") },
+                ],
+            },
         ],
     },
     Tab {

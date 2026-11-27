@@ -104,6 +104,7 @@ pub fn start() {
                         held: Vec::new(),
                         sign: Default::default(),
                         smart: Default::default(),
+                        profile: Default::default(),
                     }))
                 }),
             )
@@ -415,6 +416,8 @@ struct WebShell {
     sign: crate::sign::Dialog,
     /// Smart frames ([`crate::smart`]).
     smart: crate::smart::Dialog,
+    /// Our details ([`crate::profile`]).
+    profile: crate::profile::Dialog,
     /// Writes the preferences to local storage when they change.
     prefs_sync: PrefsSync,
 }
@@ -424,9 +427,13 @@ fn app_action(_: &mut DesignApp, id: &str) {
     match id {
         "sign" => SIGN_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
         "smart" => SMART_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
+        "profile" => PROFILE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
         _ => {}
     }
 }
+
+/// Our details was pressed; the shell opens its dialog on the next frame.
+static PROFILE_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Smart frame was pressed; the shell opens its dialog on the next frame.
 static SMART_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -435,6 +442,36 @@ static SMART_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 static SIGN_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 impl WebShell {
+    fn profile_dialog(&mut self, ctx: &egui::Context) {
+        if PROFILE_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            let stored = local_storage().and_then(|s| s.get_item(crate::profile::STORAGE_KEY).ok().flatten());
+            self.profile.profile = crate::profile::Profile::decode(stored.as_deref());
+            self.profile.set_message(String::new());
+            self.profile.open = true;
+        }
+        let (p, insert) = match self.profile.show(ctx) {
+            Some(crate::profile::Want::Save(p)) => (p, None),
+            Some(crate::profile::Want::Insert(p, i)) => (p, Some(i)),
+            None => return,
+        };
+        let kept =
+            serde_json::to_string(&p).ok().zip(local_storage()).is_some_and(|(json, s)| s.set_item(crate::profile::STORAGE_KEY, &json).is_ok());
+        let result = match insert {
+            Some(i) => {
+                crate::profile::insert(&mut self.app.session, &p, i).map(|()| format!("Inserted {}.", crate::profile::FIELDS[i].0.to_lowercase()))
+            }
+            None => crate::profile::apply(&mut self.app.session, &p).map(|n| {
+                if n == 0 { "Saved.".to_string() } else { format!("Saved, and updated {n} field{} in this document.", if n == 1 { "" } else { "s" }) }
+            }),
+        };
+        let message = match result {
+            Ok(m) if kept => m,
+            Ok(m) => format!("{m} This browser couldn't keep the details for next time."),
+            Err(e) => e,
+        };
+        self.profile.set_message(message);
+    }
+
     fn smart_dialog(&mut self, ctx: &egui::Context) {
         if SMART_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
             self.smart.open_for(&self.app.session);
@@ -598,6 +635,7 @@ impl eframe::App for WebShell {
         let graphics = self.graphics.clone();
         let _ = graphics.run_if_healthy(|| self.sign_dialog(&ctx));
         let _ = graphics.run_if_healthy(|| self.smart_dialog(&ctx));
+        let _ = graphics.run_if_healthy(|| self.profile_dialog(&ctx));
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {

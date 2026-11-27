@@ -19,6 +19,7 @@ pub const NAMES: &[&str] = &[
     "fo-booklet",
     "fo-sign",
     "fo-smart",
+    "fo-profile",
     "fo-undo",
     "fo-redo",
     "fo-copy",
@@ -143,6 +144,15 @@ pub fn paint(p: &Painter, r: Rect, name: &str, c: Color32) -> bool {
             pen.line(&[(5.0, 10.5), (15.0, 10.5)]);
             pen.line(&[(5.0, 14.0), (15.0, 14.0)]);
             pen.line(&[(9.0, 7.0), (9.0, 14.0)]);
+        }
+        // A card: a round badge beside lines of an address.
+        "fo-profile" => {
+            pen.rect(2.0, 4.0, 18.0, 16.0);
+            pen.circle(6.5, 9.0, 2.0);
+            pen.line(&[(4.0, 13.5), (9.0, 13.5)]);
+            pen.line(&[(11.0, 8.0), (16.0, 8.0)]);
+            pen.line(&[(11.0, 11.0), (16.0, 11.0)]);
+            pen.line(&[(11.0, 14.0), (14.5, 14.0)]);
         }
         // A path that turns back on itself, ending in an arrowhead pointing left.
         "fo-undo" | "fo-redo" => {
