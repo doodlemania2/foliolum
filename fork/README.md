@@ -75,8 +75,9 @@ gains a theme hook.
 
 ## Upstream test baseline
 
-At pin `47ef1ec` these DesignCraft UI tests already fail on macOS without any of our patches (`cargo test
--p designcraft-ui-egui --lib`, 2026-11-18; 1028 pass). A patch must not add to the list:
+At pin `ff1cb44` these DesignCraft UI tests already fail on macOS without any of our patches
+(`cargo test -p designcraft-ui-egui --lib`, 2026-11-26; 1114 pass with the patches). A patch must not
+add to the list:
 
 - `canvas::tests::the_paste_in_place_shortcut_pastes_in_place_and_plain_paste_offsets`
 - `menus::tests::go_back_after_presentation_returns_to_the_last_spread_presented`
@@ -84,13 +85,15 @@ At pin `47ef1ec` these DesignCraft UI tests already fail on macOS without any of
 - `menus::tests::go_back_returns_to_the_view_a_jump_left_and_scrolling_adds_no_entry`
 - `menus::tests::layout_menu_goes_through_pages_and_spreads_with_their_shortcuts`
 - `menus::tests::next_spread_at_the_last_spread_is_no_jump`
-- `panel_docking::tests::the_dock_is_at_the_right_in_english_and_the_left_in_arabic`
 - `panels::styles::tests::named_character_styles_and_redundant_local_values_are_not_paragraph_overrides`
 - `panels::styles::tests::paragraph_color_override_is_marked_and_cleared_from_the_row_menu`
 - `shortcuts_dialog::tests::a_recorded_chord_runs_nothing_changes_the_menus_at_once_and_ok_keeps_a_custom_set`
 - `shortcuts_dialog::tests::an_indesign_set_imports_through_the_review_as_a_new_set`
 - `shortcuts_dialog::tests::assign_takes_a_held_shortcut_in_one_step_for_the_menus_and_the_keys`
 - `shortcuts_dialog::tests::cancel_puts_the_keys_and_the_sets_back`
+
+(At `47ef1ec`, `panel_docking::tests::the_dock_is_at_the_right_in_english_and_the_left_in_arabic` also
+failed; it passes at `ff1cb44`.)
 
 ## Editing a patch
 
