@@ -17,7 +17,7 @@ index 7efae47f..8c51c0d0 100644
 +    let ctx = ui.ctx();
 +    let ppp = ctx.pixels_per_point();
 +    let px = ((rect.width().min(rect.height()) * ppp).round() as u32).clamp(8, 1024);
-+    let key = egui::Id::new(("brand_mark", px));
++    let key = egui::Id::unique(("brand_mark", px));
 +    let tex: Option<egui::TextureHandle> = ctx.data(|d| d.get_temp(key));
 +    let tex = tex.unwrap_or_else(|| {
 +        let mut rc = vello_cpu::RenderContext::new_with(px as u16, px as u16, vello_cpu::RenderSettings { num_threads: 0, ..Default::default() });

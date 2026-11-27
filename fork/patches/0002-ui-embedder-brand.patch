@@ -16,7 +16,7 @@ index 11f20ae9..2e81fd94 100644
  craft-ui = { workspace = true, features = ["native-windows"] }
  craft-window = { workspace = true }
 diff --git a/crates/ui-egui/src/about.rs b/crates/ui-egui/src/about.rs
-index 90d6eb70..7efae47f 100644
+index eae44ea3..e87ef070 100644
 --- a/crates/ui-egui/src/about.rs
 +++ b/crates/ui-egui/src/about.rs
 @@ -15,6 +15,11 @@ pub const BRAND: Color32 = Color32::from_rgb(0x4e, 0x7b, 0xfb);
@@ -250,7 +250,7 @@ index 6e524872..adb59d82 100644
  fn community_card(app: &mut DesignApp, ui: &mut egui::Ui) {
      let t = Tokens::get(ui.ctx());
 diff --git a/crates/ui-egui/src/lib.rs b/crates/ui-egui/src/lib.rs
-index 0896eb19..95ce63b2 100644
+index b1dfc705..a1ce772b 100644
 --- a/crates/ui-egui/src/lib.rs
 +++ b/crates/ui-egui/src/lib.rs
 @@ -16,6 +16,7 @@ pub const UPDATE_APP: craft_update::app::App = craft_update::app::App {
@@ -259,8 +259,8 @@ index 0896eb19..95ce63b2 100644
  pub mod about;
 +pub mod brand;
  pub mod canvas;
+ pub mod channel;
  pub mod chrome;
- pub mod control;
 diff --git a/crates/ui-egui/src/menus/tree.rs b/crates/ui-egui/src/menus/tree.rs
 index 6ab2e176..862aebe7 100644
 --- a/crates/ui-egui/src/menus/tree.rs
@@ -286,7 +286,7 @@ index 6ab2e176..862aebe7 100644
                  };
                  let text = match checked(app, id, params) {
 diff --git a/crates/ui-egui/src/menus/ui_commands.rs b/crates/ui-egui/src/menus/ui_commands.rs
-index f4da6e11..59bdeae3 100644
+index 17fc9745..bc977ed8 100644
 --- a/crates/ui-egui/src/menus/ui_commands.rs
 +++ b/crates/ui-egui/src/menus/ui_commands.rs
 @@ -7,7 +7,7 @@ pub const CJK_ONLY: &[&str] = &["type.tateChuYoko", "app.rubyDialog", "type.kent
