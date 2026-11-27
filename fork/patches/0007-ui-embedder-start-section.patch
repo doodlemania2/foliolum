@@ -1,0 +1,37 @@
+diff --git a/crates/ui-egui/src/brand.rs b/crates/ui-egui/src/brand.rs
+index 3ca36df5..79467804 100644
+--- a/crates/ui-egui/src/brand.rs
++++ b/crates/ui-egui/src/brand.rs
+@@ -30,6 +30,9 @@ pub struct Brand {
+     pub mark_view: f64,
+     /// The app's accent colours in place of DesignCraft's blue (not in High Contrast).
+     pub accent: Option<Accent>,
++    /// The app's own section of the start screen, drawn after Recent files and before the page sizes
++    /// (for example, its templates). `None` for none.
++    pub start_section: Option<fn(&mut crate::DesignApp, &mut egui::Ui)>,
+ }
+ 
+ /// One shape of a brand mark: an SVG path, filled and/or stroked (colours as 0xRRGGBB).
+@@ -67,6 +70,7 @@ pub const DESIGNCRAFT: Brand = Brand {
+     mark: &[],
+     mark_view: 1.0,
+     accent: None,
++    start_section: None,
+ };
+ 
+ /// The commands that open ArtCraft or DesignCraft project pages; hidden when `artcraft` is off.
+diff --git a/crates/ui-egui/src/chrome/start_screen.rs b/crates/ui-egui/src/chrome/start_screen.rs
+index 5aca131d..d1f02748 100644
+--- a/crates/ui-egui/src/chrome/start_screen.rs
++++ b/crates/ui-egui/src/chrome/start_screen.rs
+@@ -72,6 +72,10 @@ pub fn start_screen(app: &mut DesignApp, ui: &mut egui::Ui) {
+                     community_card(app, ui);
+                 }
+                 recent_files(app, ui);
++                if let Some(section) = crate::brand::get().start_section {
++                    ui.add_space(24.0);
++                    section(app, ui);
++                }
+                 ui.add_space(24.0);
+                 ui.label(crate::rtl::widget(
+                     ui,
