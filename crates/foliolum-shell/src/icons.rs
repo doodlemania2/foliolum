@@ -20,6 +20,7 @@ pub const NAMES: &[&str] = &[
     "fo-sign",
     "fo-smart",
     "fo-profile",
+    "fo-fit",
     "fo-undo",
     "fo-redo",
     "fo-copy",
@@ -153,6 +154,17 @@ pub fn paint(p: &Painter, r: Rect, name: &str, c: Color32) -> bool {
             pen.line(&[(11.0, 8.0), (16.0, 8.0)]);
             pen.line(&[(11.0, 11.0), (16.0, 11.0)]);
             pen.line(&[(11.0, 14.0), (14.5, 14.0)]);
+        }
+        // Lines of text inside a box, with arrows pressing in from both sides.
+        "fo-fit" => {
+            pen.rect(5.0, 3.0, 15.0, 17.0);
+            pen.line(&[(7.0, 7.0), (13.0, 7.0)]);
+            pen.line(&[(7.0, 10.0), (13.0, 10.0)]);
+            pen.line(&[(7.0, 13.0), (11.5, 13.0)]);
+            pen.line(&[(0.5, 10.0), (3.5, 10.0)]);
+            pen.line(&[(2.0, 8.5), (3.5, 10.0), (2.0, 11.5)]);
+            pen.line(&[(19.5, 10.0), (16.5, 10.0)]);
+            pen.line(&[(18.0, 8.5), (16.5, 10.0), (18.0, 11.5)]);
         }
         // A path that turns back on itself, ending in an arrowhead pointing left.
         "fo-undo" | "fo-redo" => {

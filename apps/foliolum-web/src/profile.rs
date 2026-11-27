@@ -69,6 +69,10 @@ pub fn apply(s: &mut Session, p: &Profile) -> Result<usize, String> {
     if s.doc().is_err() {
         return Ok(0);
     }
+    crate::undo::as_one_step(s, "Update Details", |s| apply_steps(s, p))
+}
+
+fn apply_steps(s: &mut Session, p: &Profile) -> Result<usize, String> {
     let have = defined(s);
     let mut n = 0;
     for (i, (_, var)) in FIELDS.iter().enumerate() {
@@ -87,8 +91,10 @@ pub fn insert(s: &mut Session, p: &Profile, i: usize) -> Result<(), String> {
         return Err("Click in a text box where the detail should go, then insert it.".into());
     }
     let var = FIELDS[i].1;
-    define(s, var, p.get(i))?;
-    s.execute("variables.insert", &json!({"name": var})).map(|_| ()).map_err(|e| e.to_string())
+    crate::undo::as_one_step(s, "Insert Detail", |s| {
+        define(s, var, p.get(i))?;
+        s.execute("variables.insert", &json!({"name": var})).map(|_| ()).map_err(|e| e.to_string())
+    })
 }
 
 /// The Our details dialog.

@@ -215,6 +215,10 @@ pub fn selected_frame(s: &Session) -> Option<ItemId> {
 
 /// Fills frame `id` from `b` and keeps `b` in its label.
 pub fn fill(s: &mut Session, id: ItemId, b: &Binding) -> Result<(), String> {
+    crate::undo::as_one_step(s, "Smart Frame", |s| fill_steps(s, id, b))
+}
+
+fn fill_steps(s: &mut Session, id: ItemId, b: &Binding) -> Result<(), String> {
     let story = frame_story(s, id).ok_or("Select a text box to make it a smart frame.")?;
     let text = b.text();
     let run = |s: &mut Session, cmd: &str, p: serde_json::Value| s.execute(cmd, &p).map(|_| ()).map_err(|e| format!("{cmd}: {e}"));
@@ -301,6 +305,9 @@ mod tests {
         assert!(table.cells.iter().any(|c| c.text.text == "For Ann Example, RIP"));
         assert_eq!(binding_of(&s, id), Some(b));
         s.execute("edit.undo", &json!({})).unwrap();
+        let d = s.doc().unwrap();
+        assert_eq!(d.doc.stories[&sid].text, "old", "one undo takes the whole fill back");
+        assert!(d.doc.item(id).unwrap().label.is_empty());
     }
 
     #[test]

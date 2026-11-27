@@ -13,7 +13,7 @@ pub enum Action {
     /// Pick one of DesignCraft's tools (`designcraft_tools::TOOL_GROUPS` ids).
     Tool(&'static str),
     /// Something the app around the editor does (`crate::set_app_actions`), with an open document:
-    /// "sign" is Send for signature, "smart" the Smart frame dialog, "profile" Our details.
+    /// "sign" is Send for signature, "smart" the Smart frame dialog, "profile" Our details, "copyfit" Make it fit.
     App(&'static str),
 }
 
@@ -103,7 +103,11 @@ pub const TABS: &[Tab] = &[
             },
             Group {
                 caption: "Words",
-                buttons: &[menu("Find and replace…", "app.findChange", Some("search")), menu("Spelling…", "spelling.check", Some("fo-spelling"))],
+                buttons: &[
+                    menu("Find and replace…", "app.findChange", Some("search")),
+                    menu("Spelling…", "spelling.check", Some("fo-spelling")),
+                    Button { label: "Make it fit", action: Action::App("copyfit"), icon: Some("fo-fit") },
+                ],
             },
         ],
     },

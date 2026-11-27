@@ -423,11 +423,18 @@ struct WebShell {
 }
 
 /// The ribbon's buttons for things outside DesignCraft ([`foliolum_shell::set_app_actions`]).
-fn app_action(_: &mut DesignApp, id: &str) {
+fn app_action(app: &mut DesignApp, id: &str) {
     match id {
         "sign" => SIGN_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
         "smart" => SMART_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
         "profile" => PROFILE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
+        "copyfit" => {
+            let message = match crate::smart::selected_frame(&app.session) {
+                Some(id) => crate::copyfit::fit(&mut app.session, id).map(crate::copyfit::Outcome::message).unwrap_or_else(|e| e),
+                None => "Select the text box whose text overflows, then choose Make it fit.".to_string(),
+            };
+            app.status(message);
+        }
         _ => {}
     }
 }
