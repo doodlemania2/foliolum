@@ -131,13 +131,15 @@ impl Dialog {
             ui.add_space(4.0);
             egui::Grid::new("profile_fields").num_columns(3).spacing([8.0, 6.0]).show(ui, |ui| {
                 for (i, (label, _)) in FIELDS.iter().enumerate() {
-                    ui.label(*label);
+                    let name = ui.label(*label);
+                    // min_size, not only desired_width: the window's first, invisible sizing pass
+                    // lays the grid out with no room, and the columns would keep that width.
                     let edit = if i == 1 {
-                        egui::TextEdit::multiline(self.profile.get_mut(i)).desired_rows(2).desired_width(260.0)
+                        egui::TextEdit::multiline(self.profile.get_mut(i)).desired_rows(2).desired_width(260.0).min_size(egui::vec2(260.0, 0.0))
                     } else {
-                        egui::TextEdit::singleline(self.profile.get_mut(i)).desired_width(260.0)
+                        egui::TextEdit::singleline(self.profile.get_mut(i)).desired_width(260.0).min_size(egui::vec2(260.0, 0.0))
                     };
-                    ui.add(edit);
+                    ui.add(edit).labelled_by(name.id);
                     if ui.button("Insert").clicked() {
                         want = Some(Want::Insert(self.profile.clone(), i));
                     }
@@ -159,8 +161,33 @@ impl Dialog {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// The widths of the text fields `show` draws, after a few frames.
+    pub(crate) fn field_widths(mut show: impl FnMut(&egui::Context)) -> Vec<f32> {
+        use egui_kittest::kittest::Queryable as _;
+        // The test fonts lack the app's symbols (✕); widths don't depend on them.
+        let mut h = egui_kittest::Harness::builder().with_size(egui::vec2(1440.0, 900.0)).allow_missing_glyphs().build_ui(|ui| show(ui.ctx()));
+        h.run();
+        let mut widths: Vec<f32> = h
+            .query_all_by_role(egui::accesskit::Role::TextInput)
+            .chain(h.query_all_by_role(egui::accesskit::Role::MultilineTextInput))
+            .map(|n| n.rect().width())
+            .collect();
+        widths.sort_by(f32::total_cmp);
+        widths
+    }
+
+    #[test]
+    fn the_fields_are_wide_enough_to_type_in() {
+        let mut d = Dialog { open: true, ..Default::default() };
+        let widths = field_widths(|ctx| {
+            d.show(ctx);
+        });
+        assert_eq!(widths.len(), FIELDS.len());
+        assert!(widths[0] >= 250.0, "{widths:?}");
+    }
 
     fn session() -> Session {
         let mut s = Session::new();

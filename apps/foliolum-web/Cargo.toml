@@ -44,3 +44,5 @@ web-sys = { version = "0.3", features = ["Event", "EventTarget", "Window", "Docu
 # The bundled fonts compiled in, so tests measure text as the app draws it.
 foliolum-fonts = { workspace = true, features = ["embed"] }
 designcraft-geom = { workspace = true }
+# Lays dialogs out headlessly and reads each widget's size (their accesskit nodes).
+egui_kittest = "0.37"

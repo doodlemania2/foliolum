@@ -236,6 +236,18 @@ fn fill_steps(s: &mut Session, id: ItemId, b: &Binding) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn the_grid_cells_and_pattern_are_wide_enough_to_type_in() {
+        let mut d = Dialog { open: true, frame: Some(ItemId(1)), binding: masses(), ..Default::default() };
+        d.binding.layout = Layout::Lines;
+        let widths = crate::profile::tests::field_widths(|ctx| {
+            d.show(ctx);
+        });
+        assert!(widths.len() > 3, "{widths:?}");
+        assert!(widths[0] >= 115.0, "{widths:?}");
+        assert!(widths.last().copied().unwrap_or_default() >= 350.0, "{widths:?}");
+    }
+
     fn masses() -> Binding {
         Binding {
             layout: Layout::Table,
@@ -437,10 +449,12 @@ impl Dialog {
             egui::Grid::new("smart_cells").striped(true).spacing([4.0, 2.0]).show(ui, |ui| {
                 for (r, row) in b.rows.iter_mut().enumerate() {
                     row.resize(width, String::new());
-                    for cell in row.iter_mut() {
-                        let edit = egui::TextEdit::singleline(cell).desired_width(120.0);
+                    for (c, cell) in row.iter_mut().enumerate() {
+                        // min_size as in Our details: the sizing pass would leave the cells 40 px wide.
+                        let edit = egui::TextEdit::singleline(cell).desired_width(120.0).min_size(egui::vec2(120.0, 0.0));
                         let edit = if r == 0 && b.header { edit.font(egui::TextStyle::Button) } else { edit };
-                        ui.add(edit);
+                        let label = format!("Row {}, column {}", r + 1, c + 1);
+                        ui.add(edit).widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::TextInput, true, &label));
                     }
                     if ui.small_button("✕").on_hover_text("Remove this row").clicked() {
                         remove_row = Some(r);
@@ -473,9 +487,10 @@ impl Dialog {
         });
         if b.layout == Layout::Lines {
             ui.horizontal(|ui| {
-                ui.label("Each line");
+                let name = ui.label("Each line");
                 let hint = b.default_pattern();
-                ui.add(egui::TextEdit::singleline(&mut b.pattern).hint_text(hint).desired_width(360.0));
+                ui.add(egui::TextEdit::singleline(&mut b.pattern).hint_text(hint).desired_width(360.0).min_size(egui::vec2(360.0, 0.0)))
+                    .labelled_by(name.id);
             });
             let names: Vec<String> = b.columns().iter().map(|c| format!("{{{c}}}")).collect();
             ui.label(egui::RichText::new(format!("Use {} for the columns.", names.join(" "))).small());

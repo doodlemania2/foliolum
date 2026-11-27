@@ -404,11 +404,18 @@ impl Dialog {
         }
         ui.separator();
         egui::Grid::new("sign_form").num_columns(2).spacing([8.0, 6.0]).show(ui, |ui| {
-            ui.label("Title");
-            ui.add(egui::TextEdit::singleline(&mut self.title).desired_width(300.0));
+            let l = ui.label("Title");
+            ui.add(egui::TextEdit::singleline(&mut self.title).desired_width(300.0).min_size(egui::vec2(300.0, 0.0))).labelled_by(l.id);
             ui.end_row();
-            ui.label("Message");
-            ui.add(egui::TextEdit::multiline(&mut self.message).desired_rows(2).desired_width(300.0).hint_text("Optional, for the email"));
+            let l = ui.label("Message");
+            ui.add(
+                egui::TextEdit::multiline(&mut self.message)
+                    .desired_rows(2)
+                    .desired_width(300.0)
+                    .min_size(egui::vec2(300.0, 0.0))
+                    .hint_text("Optional, for the email"),
+            )
+            .labelled_by(l.id);
             ui.end_row();
         });
         ui.add_space(6.0);
@@ -417,8 +424,11 @@ impl Dialog {
         egui::Grid::new("sign_people").num_columns(4).spacing([6.0, 4.0]).show(ui, |ui| {
             for (i, p) in self.people.iter_mut().enumerate() {
                 ui.label(format!("r{}", i + 1));
-                ui.add(egui::TextEdit::singleline(&mut p.name).hint_text("Name").desired_width(140.0));
-                ui.add(egui::TextEdit::singleline(&mut p.email).hint_text("Email").desired_width(180.0));
+                let (name, email) = (format!("Name of person r{}", i + 1), format!("Email of person r{}", i + 1));
+                ui.add(egui::TextEdit::singleline(&mut p.name).hint_text("Name").desired_width(140.0).min_size(egui::vec2(140.0, 0.0)))
+                    .widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::TextInput, true, &name));
+                ui.add(egui::TextEdit::singleline(&mut p.email).hint_text("Email").desired_width(180.0).min_size(egui::vec2(180.0, 0.0)))
+                    .widget_info(|| egui::WidgetInfo::labeled(egui::accesskit::Role::TextInput, true, &email));
                 if ui.small_button("Remove").clicked() {
                     remove = Some(i);
                 }
@@ -508,8 +518,8 @@ impl Dialog {
         }
         ui.collapsing("Or paste an API token", |ui| {
             ui.horizontal(|ui| {
-                ui.label("API token");
-                ui.add(egui::TextEdit::singleline(&mut self.token).password(true).desired_width(220.0));
+                let l = ui.label("API token");
+                ui.add(egui::TextEdit::singleline(&mut self.token).password(true).desired_width(220.0)).labelled_by(l.id);
                 ui.hyperlink_to("Get one", TOKENS_PAGE);
             });
         });
@@ -602,6 +612,18 @@ mod tests {
         assert!(explain(401, "").contains("token"));
         assert!(explain(400, r#"{"message":"Invalid email"}"#).contains("Invalid email"));
         assert!(looks_like_email("a.b@c.org") && !looks_like_email("a b@c.org") && !looks_like_email("a@.org") && !looks_like_email("@c.org"));
+    }
+
+    #[test]
+    fn the_fields_are_wide_enough_to_type_in() {
+        let mut d = Dialog::default();
+        d.open("Bulletin");
+        let marks = Marks::new();
+        let widths = crate::profile::tests::field_widths(|ctx| {
+            d.show(ctx, &marks);
+        });
+        assert!(widths.len() >= 4, "{widths:?}");
+        assert!(widths[0] >= 135.0, "{widths:?}");
     }
 
     #[test]
