@@ -4,7 +4,8 @@
 resolver = "3"
 members = ["crates/*", "apps/*", "xtask"]
 # DesignCraft has its own workspace; path deps inside our directory would otherwise join ours.
-exclude = ["upstream"]
+# services/foliolum-api is its own workspace too, so its image builds without DesignCraft.
+exclude = ["upstream", "services"]
 
 [workspace.package]
 version = "0.1.0"

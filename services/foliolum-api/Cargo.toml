@@ -1,0 +1,41 @@
+# Foliolum's backend (app.foliolum.app/api): Claviger sign-in checks, parishes, shared templates and
+# proofreading through the fleet's AI relay. Its own workspace, so its image builds from this folder
+# alone, without DesignCraft.
+[workspace]
+
+[package]
+name = "foliolum-api"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/doodlemania2/foliolum"
+rust-version = "1.95"
+publish = false
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time", "sync"] }
+tokio-postgres = { version = "0.7", features = ["with-uuid-1"] }
+deadpool-postgres = "0.14"
+jsonwebtoken = "9"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+sha2 = "0.10"
+base64 = "0.22"
+rand = "0.9"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+# Test tokens are signed with a key made at test time, so no private key is in the repo.
+rsa = { version = "0.9", features = ["pem"] }
+
+[profile.release]
+strip = true

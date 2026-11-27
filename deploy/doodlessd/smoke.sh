@@ -43,8 +43,8 @@ expect_status 200 /
 expect_header '^cache-control: no-cache, no-transform' /
 expect_header "^content-security-policy: default-src 'none'; script-src 'self' 'sha256-" /
 expect_header "'wasm-unsafe-eval'" /
-# Send for signature talks to TDPdf Sign and nothing else.
-expect_header "connect-src 'self' https://sign.tdpdf.com;" /
+# Send for signature talks to TDPdf Sign, sign-in to Claviger, and nothing else.
+expect_header "connect-src 'self' https://sign.tdpdf.com https://sso.claviger.app;" /
 expect_header '^x-content-type-options: nosniff' /
 grep -qF 'Based on DesignCraft by the ArtCraft team' <<<"$page" || fail "/: no DesignCraft credit"
 
@@ -101,10 +101,26 @@ expect_header '^content-type: text/html' /sign/callback
 expect_header '^cache-control: no-cache, no-transform' /sign/callback
 expect_header "^content-security-policy: default-src 'none'" /sign/callback
 c "${BASE}/sign/callback" | grep -qF 'src="/sign/callback.js"' || fail "/sign/callback: no callback script"
+get '/auth/callback?code=x&state=y'
+expect_status 200 /auth/callback
+expect_header '^cache-control: no-cache, no-transform' /auth/callback
+c "${BASE}/auth/callback" | grep -qF 'data-channel="foliolum-auth"' || fail "/auth/callback: no callback script"
 get /sign/callback.js
 expect_status 200 /sign/callback.js
 expect_header '^content-type: text/javascript' /sign/callback.js
 expect_header '^cache-control: no-cache, no-transform' /sign/callback.js
+
+# The backend, through the editor's nginx: up, with its database, and never cached. Only on the host
+# (deploy.sh passes `with-api`); smoke-image.sh tests the editor's image alone.
+if [ "${2:-}" = with-api ]; then
+get /api/health
+expect_status 200 /api/health
+expect_header '^cache-control: no-store' /api/health
+get /api/ready
+expect_status 200 /api/ready
+get /api/me
+expect_status 401 "/api/me (signed out)"
+fi
 
 get /no-such-file.js
 expect_status 404 /no-such-file.js

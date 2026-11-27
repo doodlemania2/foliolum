@@ -1,12 +1,16 @@
-# The Foliolum editor (app.foliolum.app) on doodlessd, mirrored to doodlessd2 by fleet-mirror.
+# Foliolum (app.foliolum.app) on doodlessd: the editor, its backend and the backend's database.
 #
 # Lives at /home/derek/foliolum-app-stack/docker-compose.yml. CI deploys it from the
 # edge-deploy-foliolum-app runners over edge-ssh (.github/workflows/deploy.yml), so no runner lives
-# here. The image tag is pinned in .env (FOLIOLUM_APP_IMAGE=...:sha-<commit>), never :latest.
+# here. Both image tags are pinned in .env (FOLIOLUM_APP_IMAGE, FOLIOLUM_API_IMAGE: ...:sha-<commit>),
+# never :latest. The database's names and passwords and the AI relay key are written to .env once
+# by wire-backend.sh (from OpenBao secret/apps/foliolum-db and secret/apps/foliolum-llm-relay).
 #
-# The only way in is the shared public-fleet Cloudflare tunnel (K3s repo). Its cloudflared uses the
-# host network and reaches the editor on 127.0.0.1:18117, the port reserved for app.foliolum.app in
-# K3s services/edge/README.md. No public port.
+# A data app, so the chores pattern: it runs on the primary only, behind the primary-only
+# public-fleet-primary tunnel, with a Postgres standby on doodlessd2 that `promote` fails over to
+# (K3s services/edge). The tunnel reaches the editor on 127.0.0.1:18117, the port reserved for
+# app.foliolum.app in K3s services/edge/README.md; the editor's nginx passes /api/ to the backend.
+# No other port is published.
 
 name: foliolum-app
 
@@ -20,6 +24,7 @@ services:
     container_name: foliolum-app
     restart: unless-stopped
     ports: ["127.0.0.1:18117:8080"]
+    networks: [web]
     read_only: true
     tmpfs: [/tmp]
     cap_drop: [ALL]
@@ -35,3 +40,86 @@ services:
       resources:
         limits: { memory: 64m, cpus: "0.5" }
     logging: *logging
+
+  foliolum-api:
+    image: ${FOLIOLUM_API_IMAGE:?set FOLIOLUM_API_IMAGE in .env (deploy.sh does)}
+    container_name: foliolum-api
+    restart: unless-stopped
+    environment:
+      FOLIOLUM_DB_HOST: foliolum-db
+      FOLIOLUM_DB: ${FOLIOLUM_DB:?run wire-backend.sh}
+      FOLIOLUM_APP_ROLE: ${FOLIOLUM_APP_ROLE:?run wire-backend.sh}
+      FOLIOLUM_APP_PASSWORD: ${FOLIOLUM_APP_PASSWORD:?run wire-backend.sh}
+      FOLIOLUM_OWNER_ROLE: ${FOLIOLUM_OWNER_ROLE:?run wire-backend.sh}
+      FOLIOLUM_OWNER_PASSWORD: ${FOLIOLUM_OWNER_PASSWORD:?run wire-backend.sh}
+      FOLIOLUM_OIDC_ISSUER: https://sso.claviger.app/oidc
+      FOLIOLUM_OIDC_CLIENT_ID: foliolum-app
+      FOLIOLUM_OIDC_JWKS_URL: https://sso.claviger.app/oidc/keys
+      # The relay is on this host; without a key proofreading is off and the rest works.
+      FOLIOLUM_LLM_URL: ${FOLIOLUM_LLM_URL:-http://llm-relay:8080/v1/chat/completions}
+      FOLIOLUM_LLM_KEY: ${FOLIOLUM_LLM_KEY:-}
+      FOLIOLUM_LLM_MODEL: ${FOLIOLUM_LLM_MODEL:-local:default}
+      RUST_LOG: info
+    depends_on:
+      foliolum-db: { condition: service_healthy }
+    networks: [web, db, llm-relay]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/api/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+      start_interval: 2s
+    deploy:
+      resources:
+        limits: { memory: 128m, cpus: "0.5" }
+    logging: *logging
+
+  foliolum-db:
+    image: postgres:17-alpine@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    container_name: foliolum-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run wire-backend.sh}
+      POSTGRES_DB: ${FOLIOLUM_DB:?run wire-backend.sh}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+      # Read by db-init/01-roles.sh on the first start of an empty volume.
+      FOLIOLUM_DB: ${FOLIOLUM_DB:?run wire-backend.sh}
+      FOLIOLUM_OWNER_ROLE: ${FOLIOLUM_OWNER_ROLE:?run wire-backend.sh}
+      FOLIOLUM_OWNER_PASSWORD: ${FOLIOLUM_OWNER_PASSWORD:?run wire-backend.sh}
+      FOLIOLUM_APP_ROLE: ${FOLIOLUM_APP_ROLE:?run wire-backend.sh}
+      FOLIOLUM_APP_PASSWORD: ${FOLIOLUM_APP_PASSWORD:?run wire-backend.sh}
+    volumes:
+      - foliolum-db:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+    # No published port: reachable only on the internal db network (and the standby link K3s sets up).
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      # 30 s like chores: every check is an exec, and execs across the host's containers add up.
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+      start_interval: 2s
+    security_opt: ["no-new-privileges:true"]
+    deploy:
+      resources:
+        limits: { memory: 256m, cpus: "0.5" }
+        reservations: { memory: 32m }
+    logging: *logging
+
+networks:
+  web: {}
+  db:
+    internal: true
+  # The fleet's AI relay on this host (K3s runs it; MassCast joins it the same way).
+  llm-relay:
+    external: true
+
+volumes:
+  foliolum-db: {}
