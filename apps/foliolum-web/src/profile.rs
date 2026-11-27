@@ -58,7 +58,7 @@ fn defined(s: &mut Session) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn define(s: &mut Session, name: &str, text: &str) -> Result<(), String> {
+pub fn define(s: &mut Session, name: &str, text: &str) -> Result<(), String> {
     // An empty detail still needs a value, or the field would vanish; a space keeps its place.
     let text = if text.trim().is_empty() { " " } else { text.trim() };
     s.execute("variables.define", &json!({"name": name, "type": "custom", "text": text})).map(|_| ()).map_err(|e| e.to_string())

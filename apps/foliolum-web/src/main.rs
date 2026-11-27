@@ -52,6 +52,10 @@ mod copyfit;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 mod undo;
 
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod starters;
+
 #[cfg(target_arch = "wasm32")]
 mod sign_web;
 
@@ -68,7 +72,14 @@ const BRAND: designcraft_ui_egui::brand::Brand = designcraft_ui_egui::brand::Bra
     mark: QUILL,
     mark_view: 64.0,
     accent: Some(ACCENT),
+    start_section: START_SECTION,
 };
+
+/// The parish templates on the start screen (#56).
+#[cfg(any(target_arch = "wasm32", test))]
+const START_SECTION: Option<fn(&mut designcraft_ui_egui::DesignApp, &mut egui::Ui)> = Some(starters::start_section);
+#[cfg(not(any(target_arch = "wasm32", test)))]
+const START_SECTION: Option<fn(&mut designcraft_ui_egui::DesignApp, &mut egui::Ui)> = None;
 
 /// Foliolum's mark, the quill of `favicon.svg`: a rubric leaf and a paper leaf on a paper tile.
 const QUILL: &[designcraft_ui_egui::brand::MarkShape] = {

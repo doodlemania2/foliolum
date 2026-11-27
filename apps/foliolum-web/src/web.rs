@@ -394,6 +394,12 @@ async fn fetch_bytes(url: &str) -> Result<Vec<u8>, String> {
 }
 
 /// The page's local storage; `None` where the browser refuses it (some private modes).
+/// The Our details saved in this browser (empty when there are none).
+pub fn stored_profile() -> crate::profile::Profile {
+    let stored = local_storage().and_then(|s| s.get_item(crate::profile::STORAGE_KEY).ok().flatten());
+    crate::profile::Profile::decode(stored.as_deref())
+}
+
 fn local_storage() -> Option<web_sys::Storage> {
     web_sys::window()?.local_storage().ok().flatten()
 }
@@ -451,8 +457,7 @@ static SIGN_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 impl WebShell {
     fn profile_dialog(&mut self, ctx: &egui::Context) {
         if PROFILE_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
-            let stored = local_storage().and_then(|s| s.get_item(crate::profile::STORAGE_KEY).ok().flatten());
-            self.profile.profile = crate::profile::Profile::decode(stored.as_deref());
+            self.profile.profile = stored_profile();
             self.profile.set_message(String::new());
             self.profile.open = true;
         }

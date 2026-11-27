@@ -68,6 +68,16 @@ On the shared m4: `nice -n 15 env CARGO_BUILD_JOBS=4 trunk build` (about 5 minut
 
 Each is one undo step (`src/undo.rs`).
 
+## Parish templates (start screen)
+
+`src/starters.rs` (#56): a weekly bulletin, an event flyer, a sign-up sheet and a newsletter, as cards on
+the start screen (fork patch 0007). Picking one builds it with the editor's own commands as a new,
+untitled document, so no template files ship. The parish details are Our details fields filled from the
+details saved in this browser (placeholders where none are saved), and the lists are smart frames
+holding sample rows. The tests build each template with the bundled fonts and check that no text
+overflows and that it exports. To look at them:
+`FOLIOLUM_STARTERS_OUT=<dir> cargo test -p foliolum-web write_template_pdfs -- --ignored`.
+
 ## Send for signature
 
 File ▸ Send for signature sends the open document, as a PDF, to TDPdf Sign (https://sign.tdpdf.com),
