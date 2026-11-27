@@ -15,7 +15,7 @@
 # Role and database names must be lower-case identifiers (db-init/01-roles.sh puts them in SQL), and
 # passwords and the key must be URL-safe characters, so neither the shell, compose nor SQL reads
 # anything into them. It prints key names only, never values, holds the deploy lock, keeps a copy
-# of the old .env as .env.pre-backend, and restarts nothing: the next deploy picks them up.
+# of the old .env as .env.pre-backend (both mode 600), and restarts nothing: the next deploy picks them up.
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 umask 077
@@ -59,6 +59,7 @@ awk -F= -v keys=" ${!want[*]} " 'index(keys, " " $1 " ") == 0' .env > "$tmp"
 for k in "${!want[@]}"; do
   printf '%s=%s\n' "$k" "${want[$k]}" >> "$tmp"
 done
-chmod --reference=.env "$tmp" 2>/dev/null || chmod 600 "$tmp"
+# Always 600: it holds the database passwords (the old .env may have been 644).
+chmod 600 "$tmp" .env.pre-backend
 mv "$tmp" .env
 echo "wrote ${!want[*]} to .env (the old one is .env.pre-backend)"

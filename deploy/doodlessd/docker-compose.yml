@@ -113,6 +113,41 @@ services:
         reservations: { memory: 32m }
     logging: *logging
 
+  # The database's daily backup to IDrive e2 through restic (deploy/backup; the chores pattern). Off
+  # until backup.env exists and COMPOSE_PROFILES=backup is in .env (K3s writes both from OpenBao
+  # secret/apps/foliolum-backup).
+  foliolum-backup:
+    profiles: [backup]
+    image: ${FOLIOLUM_BACKUP_IMAGE:-}
+    container_name: foliolum-backup
+    restart: unless-stopped
+    depends_on:
+      foliolum-db: { condition: service_healthy }
+    env_file:
+      - path: backup.env
+        required: false
+    environment:
+      PGHOST: foliolum-db
+      PGDATABASE: ${FOLIOLUM_DB:?run wire-backend.sh}
+      PGUSER: ${FOLIOLUM_OWNER_ROLE:?run wire-backend.sh}
+      PGPASSWORD: ${FOLIOLUM_OWNER_PASSWORD:?run wire-backend.sh}
+    # db for the dump, web to reach IDrive and the telemetry endpoint (db is internal).
+    networks: [db, web]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(( $$(date +%s) - $$(cat /tmp/backup.beat) )) -lt 120 ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { memory: 256m, cpus: "0.5" }
+    logging: *logging
+
 networks:
   web: {}
   db:
