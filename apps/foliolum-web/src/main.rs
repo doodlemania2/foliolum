@@ -36,6 +36,10 @@ mod prefs_store;
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 mod sign;
 
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod smart;
+
 #[cfg(target_arch = "wasm32")]
 mod sign_web;
 

@@ -18,6 +18,7 @@ pub const NAMES: &[&str] = &[
     "fo-picture",
     "fo-booklet",
     "fo-sign",
+    "fo-smart",
     "fo-undo",
     "fo-redo",
     "fo-copy",
@@ -134,6 +135,14 @@ pub fn paint(p: &Painter, r: Rect, name: &str, c: Color32) -> bool {
             pen.line(&[(11.0, 18.0), (3.0, 18.0), (3.0, 3.0), (13.0, 3.0), (13.0, 7.0)]);
             pen.line(&[(5.0, 15.0), (10.0, 15.0)]);
             pen.closed(&[(18.5, 6.5), (16.5, 4.5), (9.5, 11.5), (9.0, 14.0), (11.5, 13.5)]);
+        }
+        // A text box holding a small table.
+        "fo-smart" => {
+            pen.rect(2.5, 3.0, 17.5, 17.0);
+            pen.line(&[(5.0, 7.0), (15.0, 7.0)]);
+            pen.line(&[(5.0, 10.5), (15.0, 10.5)]);
+            pen.line(&[(5.0, 14.0), (15.0, 14.0)]);
+            pen.line(&[(9.0, 7.0), (9.0, 14.0)]);
         }
         // A path that turns back on itself, ending in an arrowhead pointing left.
         "fo-undo" | "fo-redo" => {

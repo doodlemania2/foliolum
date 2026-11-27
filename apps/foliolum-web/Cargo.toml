@@ -22,6 +22,8 @@ designcraft-engine = { workspace = true }
 designcraft-fonts = { workspace = true }
 designcraft-format = { workspace = true }
 designcraft-ui-egui = { workspace = true }
+designcraft-textimport = { workspace = true }
+serde = { workspace = true }
 egui = { workspace = true }
 form_urlencoded = "1.2"
 log = { workspace = true }
