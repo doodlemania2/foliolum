@@ -31,9 +31,10 @@ hashes="$(node "$here/csp-hashes.js" "$out/html/index.html")"
 read -r script_hash style_hash <<<"$hashes"
 
 # The policy. 'wasm-unsafe-eval' lets the page compile its own .wasm; it does not allow eval().
-# One other origin: TDPdf Sign's API, for Send for signature (apps/foliolum-web/src/sign.rs). Fonts
-# come from this site and documents from the visitor's disk.
-csp="default-src 'none'; script-src 'self' ${script_hash} 'wasm-unsafe-eval'; style-src 'self' ${style_hash}; connect-src 'self' https://sign.tdpdf.com; img-src 'self' blob: data:; worker-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+# Two other origins: TDPdf Sign's API, for Send for signature (apps/foliolum-web/src/sign.rs), and
+# Claviger, for signing in and creating an account (apps/foliolum-web/src/account.rs). The backend is
+# this site's /api/. Fonts come from this site and documents from the visitor's disk.
+csp="default-src 'none'; script-src 'self' ${script_hash} 'wasm-unsafe-eval'; style-src 'self' ${style_hash}; connect-src 'self' https://sign.tdpdf.com https://sso.claviger.app; img-src 'self' blob: data:; worker-src 'self' blob:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 cat > "$out/headers.inc" <<EOF
 # Written by deploy/image/prepare.sh. nginx does not inherit add_header into a location that sets its

@@ -102,6 +102,15 @@ jobs:
           cargo xtask synth fixtures/stress
           cargo xtask gate --set stress --names --no-review fixtures/stress
 
+      - name: Backend (services/foliolum-api) format, clippy and tests
+        working-directory: services/foliolum-api
+        # tests/pg.rs needs a Postgres (README.md) and skips here; the API tests run on the
+        # in-memory store.
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+          cargo test --locked
+
       - name: Clippy (web)
         run: cargo clippy -p foliolum-web --target wasm32-unknown-unknown -- -D warnings
 

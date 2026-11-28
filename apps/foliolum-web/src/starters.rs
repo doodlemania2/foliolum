@@ -463,6 +463,8 @@ pub fn start_section(app: &mut designcraft_ui_egui::DesignApp, ui: &mut egui::Ui
     if let Some(st) = picked {
         open(app, &st, &stored_profile());
     }
+    // The templates the person's parish shares, once signed in (#60).
+    crate::account::start_section(ui);
 }
 
 /// The details saved in this browser (none outside one).

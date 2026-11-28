@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Foliolum: signing in</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <script src="/sign/callback.js" data-channel="foliolum-auth" defer></script>
+</head>
+<body>
+  <!-- Claviger sends the sign-in popup back here (src/account.rs, REDIRECT). The script hands the
+       answer to the Foliolum tab that opened it and closes this window. -->
+  <p id="note">Finishing sign-in&hellip;</p>
+</body>
+</html>

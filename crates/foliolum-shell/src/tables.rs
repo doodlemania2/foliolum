@@ -13,7 +13,8 @@ pub enum Action {
     /// Pick one of DesignCraft's tools (`designcraft_tools::TOOL_GROUPS` ids).
     Tool(&'static str),
     /// Something the app around the editor does (`crate::set_app_actions`), with an open document:
-    /// "sign" is Send for signature, "smart" the Smart frame dialog, "profile" Our details, "copyfit" Make it fit.
+    /// "sign" is Send for signature, "smart" the Smart frame dialog, "profile" Our details, "copyfit" Make it fit,
+    /// "save_template" Save as parish template, "account" the account and parish dialog, "proofread" Proofread.
     App(&'static str),
 }
 
@@ -76,6 +77,13 @@ pub const TABS: &[Tab] = &[
                 ],
             },
             Group {
+                caption: "Parish",
+                buttons: &[
+                    Button { label: "Share with parish…", action: Action::App("save_template"), icon: Some("fo-save-copy") },
+                    Button { label: "Your parish…", action: Action::App("account"), icon: Some("fo-profile") },
+                ],
+            },
+            Group {
                 caption: "Check",
                 buttons: &[menu_with("Before you print", "window.panel", r#"{"panel": "preflight"}"#, Some("panel-preflight"))],
             },
@@ -107,6 +115,7 @@ pub const TABS: &[Tab] = &[
                     menu("Find and replace…", "app.findChange", Some("search")),
                     menu("Spelling…", "spelling.check", Some("fo-spelling")),
                     Button { label: "Make it fit", action: Action::App("copyfit"), icon: Some("fo-fit") },
+                    Button { label: "Proofread…", action: Action::App("proofread"), icon: Some("fo-spelling") },
                 ],
             },
         ],

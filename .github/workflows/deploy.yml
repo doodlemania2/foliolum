@@ -90,6 +90,7 @@ jobs:
     timeout-minutes: 20
     outputs:
       ref: ${{ steps.ref.outputs.ref }}
+      api: ${{ steps.ref.outputs.api }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -102,7 +103,9 @@ jobs:
           path: build/image
 
       - id: ref
-        run: echo "ref=${REGISTRY}/${IMAGE}:sha-${SHA}-r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "ref=${REGISTRY}/${IMAGE}:sha-${SHA}-r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+          echo "api=${REGISTRY}/foliolum-api:sha-${SHA}-r${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
 
       # Host network: the BuildKit container on the docker bridge cannot reach the registry's tailnet
       # address. Buildx streams the context to BuildKit; nothing is bind-mounted.
@@ -132,6 +135,20 @@ jobs:
           docker pull "$REF"
           deploy/smoke-image.sh "$REF"
 
+      # The backend, built from its own folder (its own workspace; no DesignCraft).
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: services/foliolum-api
+          push: true
+          platforms: linux/amd64
+          tags: ${{ steps.ref.outputs.api }}
+          provenance: false
+
+      - name: Smoke the backend image
+        env:
+          API: ${{ steps.ref.outputs.api }}
+        run: deploy/smoke-api-image.sh "$API"
+
   deploy:
     name: Deploy to doodlessd
     needs: image
@@ -155,10 +172,11 @@ jobs:
       - name: Sync the stack files
         run: tar -C deploy/doodlessd -c . | /etc/edge-deploy/edge-ssh sync foliolum-app-stack
 
-      - name: Roll the editor
+      - name: Roll the editor and the backend
         env:
           REF: ${{ needs.image.outputs.ref }}
-        run: /etc/edge-deploy/edge-ssh run foliolum-app-stack deploy.sh "$REF"
+          API: ${{ needs.image.outputs.api }}
+        run: /etc/edge-deploy/edge-ssh run foliolum-app-stack deploy.sh "$REF" "$API"
 
       # Through Cloudflare. Skipped until the APP_URL variable is set, so a deploy before DNS exists
       # is not red. Asks for HTML the way a browser does (Accept: text/html), which is when Cloudflare

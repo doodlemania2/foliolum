@@ -59,6 +59,21 @@ mod starters;
 #[cfg(target_arch = "wasm32")]
 mod sign_web;
 
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod pkce;
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod account;
+
+#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+mod proofread;
+
+#[cfg(target_arch = "wasm32")]
+mod account_web;
+
 /// Foliolum's name and links in DesignCraft's UI, in place of the ArtCraft mark and community, which only
 /// DesignCraft may show (fork/patches/0002-ui-embedder-brand.patch).
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]

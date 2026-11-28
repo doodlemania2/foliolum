@@ -173,6 +173,7 @@ pub(crate) mod tests {
         let mut widths: Vec<f32> = h
             .query_all_by_role(egui::accesskit::Role::TextInput)
             .chain(h.query_all_by_role(egui::accesskit::Role::MultilineTextInput))
+            .chain(h.query_all_by_role(egui::accesskit::Role::PasswordInput))
             .map(|n| n.rect().width())
             .collect();
         widths.sort_by(f32::total_cmp);

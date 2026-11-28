@@ -95,6 +95,8 @@ pub fn start() {
                         app.session.prefs = prefs;
                     }
                     let prefs_sync = PrefsSync::new(stored);
+                    // An invite link in the address, and the sign-in kept from last time (#60).
+                    crate::account_web::start(&cc.egui_ctx, &query());
                     Ok(Box::new(WebShell {
                         prefs_sync,
                         app,
@@ -105,6 +107,10 @@ pub fn start() {
                         sign: Default::default(),
                         smart: Default::default(),
                         profile: Default::default(),
+                        account: Default::default(),
+                        save_template: Default::default(),
+                        proofread: Default::default(),
+                        proofread_result: Default::default(),
                     }))
                 }),
             )
@@ -424,6 +430,13 @@ struct WebShell {
     smart: crate::smart::Dialog,
     /// Our details ([`crate::profile`]).
     profile: crate::profile::Dialog,
+    /// Your account and parish ([`crate::account`]).
+    account: crate::account::Dialog,
+    /// Save as parish template.
+    save_template: crate::account::SaveDialog,
+    /// Review > Proofread ([`crate::proofread`]).
+    proofread: crate::proofread::Dialog,
+    proofread_result: ProofSlot,
     /// Writes the preferences to local storage when they change.
     prefs_sync: PrefsSync,
 }
@@ -434,6 +447,9 @@ fn app_action(app: &mut DesignApp, id: &str) {
         "sign" => SIGN_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
         "smart" => SMART_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
         "profile" => PROFILE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
+        "account" => crate::account::state().open = true,
+        "save_template" => SAVE_TEMPLATE_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
+        "proofread" => PROOFREAD_REQUESTED.store(true, std::sync::atomic::Ordering::Relaxed),
         "copyfit" => {
             let message = match crate::smart::selected_frame(&app.session) {
                 Some(id) => crate::copyfit::fit(&mut app.session, id).map(crate::copyfit::Outcome::message).unwrap_or_else(|e| e),
@@ -445,6 +461,13 @@ fn app_action(app: &mut DesignApp, id: &str) {
     }
 }
 
+type ProofSlot = std::sync::Arc<std::sync::Mutex<Option<Result<crate::proofread::Proof, String>>>>;
+
+/// Save as parish template was pressed.
+static SAVE_TEMPLATE_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+/// Proofread was pressed.
+static PROOFREAD_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 /// Our details was pressed; the shell opens its dialog on the next frame.
 static PROFILE_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
@@ -455,6 +478,62 @@ static SMART_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomi
 static SIGN_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 impl WebShell {
+    /// Sign-in, parishes and shared templates (#60): the dialogs, what they asked for, and a
+    /// template that arrived to open.
+    fn account_dialogs(&mut self, ctx: &egui::Context) {
+        self.account.show(ctx);
+        if SAVE_TEMPLATE_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            let title = self.app.session.active().map(|d| d.title()).unwrap_or_default();
+            self.save_template.open_for(&title);
+        }
+        if let Some((parish, name)) = self.save_template.show(ctx) {
+            crate::account::state().want(crate::account::Want::SaveTemplate { parish, name });
+        }
+        let wants = std::mem::take(&mut crate::account::state().wants);
+        for want in wants {
+            let document = match &want {
+                crate::account::Want::SaveTemplate { .. } => {
+                    self.app.session.execute("file.serialize", &serde_json::json!({})).ok().and_then(|r| r["base64"].as_str().map(str::to_string))
+                }
+                _ => None,
+            };
+            crate::account_web::run(want, ctx, document);
+        }
+        let opened = crate::account::state().opened.take();
+        if let Some((name, base64)) = opened {
+            match self.app.session.execute("file.openBytes", &serde_json::json!({"name": name, "base64": base64})) {
+                Ok(_) => self.app.status(format!("{name} is open. Save it under a new name for this week.")),
+                Err(e) => self.app.status_error("Parish templates", e.to_string()),
+            }
+        }
+    }
+
+    fn proofread_dialog(&mut self, ctx: &egui::Context) {
+        if PROOFREAD_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+            let st = crate::account::state();
+            if !st.signed_in() {
+                drop(st);
+                crate::account::state().open = true;
+                self.app.status("Sign in to proofread with AI.");
+                return;
+            }
+            drop(st);
+            self.proofread.open = true;
+        }
+        if let Some(result) = self.proofread_result.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            self.proofread.busy = false;
+            match result {
+                Ok(proof) => self.proofread.proof = Some(proof),
+                Err(e) => self.proofread.message = e,
+            }
+        }
+        if let Some(crate::proofread::Want::Check(story, text)) = self.proofread.show(ctx, &mut self.app.session) {
+            self.proofread.busy = true;
+            self.proofread.proof = None;
+            crate::account_web::proofread(story, text, self.proofread_result.clone(), ctx.clone());
+        }
+    }
+
     fn profile_dialog(&mut self, ctx: &egui::Context) {
         if PROFILE_REQUESTED.swap(false, std::sync::atomic::Ordering::Relaxed) {
             self.profile.profile = stored_profile();
@@ -665,6 +744,8 @@ impl eframe::App for WebShell {
         let _ = graphics.run_if_healthy(|| self.sign_dialog(&ctx));
         let _ = graphics.run_if_healthy(|| self.smart_dialog(&ctx));
         let _ = graphics.run_if_healthy(|| self.profile_dialog(&ctx));
+        let _ = graphics.run_if_healthy(|| self.account_dialogs(&ctx));
+        let _ = graphics.run_if_healthy(|| self.proofread_dialog(&ctx));
     }
 
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
