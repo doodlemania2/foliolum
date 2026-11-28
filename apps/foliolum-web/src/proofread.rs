@@ -39,11 +39,13 @@ fn byte_at(s: &str, n: usize) -> usize {
     s.char_indices().nth(n).map_or(s.len(), |(i, _)| i)
 }
 
-/// The text to proofread: the selected text box's story.
+/// The text to proofread: the story being typed in, or else the selected text box's.
 pub fn selected_story(s: &Session) -> Option<(u64, String)> {
-    let frame = crate::smart::selected_frame(s)?;
     let st = s.doc().ok()?;
-    let story = st.doc.item(frame)?.text_frame()?.story;
+    let story = match &st.selection.text {
+        Some(t) => t.story,
+        None => st.doc.item(crate::smart::selected_frame(s)?)?.text_frame()?.story,
+    };
     Some((story.0, st.doc.stories.get(&story)?.text.clone()))
 }
 
@@ -121,8 +123,8 @@ impl Dialog {
         }
         let mut open = true;
         let mut want = None;
-        egui::Window::new("Proofread").open(&mut open).collapsible(false).resizable(true).default_width(480.0).show(ctx, |ui| {
-            ui.label("Checks the selected text box for spelling, grammar and punctuation. Nothing changes until you apply a suggestion, and Undo takes back each one.");
+        egui::Window::new("Proofread").open(&mut open).collapsible(false).resizable(true).default_width(480.0).pivot(egui::Align2::CENTER_TOP).default_pos(ctx.content_rect().center_top() + egui::vec2(0.0, 140.0)).show(ctx, |ui| {
+            ui.label("Checks the selected text box, or the one you are typing in, for spelling, grammar and punctuation. Nothing changes until you apply a suggestion, and Undo takes back each one.");
             ui.add_space(4.0);
             if self.busy {
                 ui.horizontal(|ui| {
@@ -235,6 +237,15 @@ mod tests {
         // Each was its own undo step.
         s.execute("edit.undo", &json!({})).unwrap_or_default();
         assert_eq!(text(&s, story), "Café opens Sunay. The coffee is \"free\".");
+    }
+
+    #[test]
+    fn the_story_being_typed_in_counts_as_selected() {
+        let (mut s, story) = session("Join us Sunay.");
+        let _ = s.execute("selection.set", &json!({"ids": []}));
+        assert_eq!(selected_story(&s), None);
+        let _ = s.execute("text.select", &json!({"story": story, "anchor": 3, "focus": 3}));
+        assert_eq!(selected_story(&s), Some((story, "Join us Sunay.".to_string())));
     }
 
     #[test]

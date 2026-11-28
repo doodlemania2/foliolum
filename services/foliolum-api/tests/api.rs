@@ -86,6 +86,17 @@ async fn sign_in_is_required_and_checked() {
     assert_eq!(call(&app, "GET", "/api/me", Some(&token("a", "other-app", 300)), None).await.0, StatusCode::UNAUTHORIZED, "another client's token");
     assert_eq!(call(&app, "GET", "/api/me", Some(&token("a", AUD, -300)), None).await.0, StatusCode::UNAUTHORIZED, "expired");
     assert_eq!(call(&app, "GET", "/api/me", Some("not.a.token"), None).await.0, StatusCode::UNAUTHORIZED);
+    // GHSA type confusion (jsonwebtoken < 10.3): an exp or nbf of the wrong JSON type must not
+    // count as absent.
+    let mut h = Header::new(Algorithm::RS256);
+    h.kid = Some("k1".into());
+    let far = "99999999999";
+    for claims in
+        [json!({"iss": ISS, "aud": AUD, "sub": "a", "exp": far}), json!({"iss": ISS, "aud": AUD, "sub": "a", "exp": 9_999_999_999i64, "nbf": far})]
+    {
+        let t = encode(&h, &claims, &keys().0).unwrap();
+        assert_eq!(call(&app, "GET", "/api/me", Some(&t), None).await.0, StatusCode::UNAUTHORIZED, "{claims}");
+    }
     let (s, me) = call(&app, "GET", "/api/me", Some(&token("a", AUD, 300)), None).await;
     assert_eq!(s, StatusCode::OK);
     assert_eq!(me["sub"], "a");

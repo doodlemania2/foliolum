@@ -354,8 +354,14 @@ impl Dialog {
         self.pick_up_sign_in();
         let mut open = self.open;
         let mut request = None;
-        egui::Window::new("Send for signature").open(&mut open).collapsible(false).resizable(false).default_width(460.0).show(ctx, |ui| {
-            match self.stage.clone() {
+        egui::Window::new("Send for signature")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(460.0)
+            .pivot(egui::Align2::CENTER_TOP)
+            .default_pos(ctx.content_rect().center_top() + egui::vec2(0.0, 140.0))
+            .show(ctx, |ui| match self.stage.clone() {
                 Stage::Editing => request = self.form(ui, marks),
                 Stage::Working => {
                     ui.horizontal(|ui| {
@@ -364,8 +370,7 @@ impl Dialog {
                     });
                 }
                 Stage::Done(outcome) => self.done(ui, &outcome),
-            }
-        });
+            });
         self.open = open;
         if request.is_some() {
             self.stage = Stage::Working;
