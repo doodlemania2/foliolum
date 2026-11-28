@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run by CI through the deploy gate (`edge-ssh run foliolum-app-stack deploy.sh <app ref> <api ref>`).
 # By hand, from this directory:
-#   deploy.sh <app ref> <api ref>
+#   deploy.sh <app ref> <api ref> [<backup ref>]
 #     for example doodlemanage.tail890bc.ts.net:5000/foliolum-app:sha-<commit>-r<run>-1
 #             and doodlemanage.tail890bc.ts.net:5000/foliolum-api:sha-<commit>-r<run>-1
 #
@@ -13,6 +13,8 @@ cd "$(dirname "$(readlink -f "$0")")"
 
 app="${1:?usage: deploy.sh <registry/foliolum-app:sha-...> <registry/foliolum-api:sha-...>}"
 api="${2:?usage: deploy.sh <registry/foliolum-app:sha-...> <registry/foliolum-api:sha-...>}"
+# The backup image only changes its tag; it runs once backup.env and COMPOSE_PROFILES=backup are set.
+backup="${3:-}"
 
 setvar() {
   if grep -q "^$1=" .env 2>/dev/null; then sed -i "s|^$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi
@@ -37,7 +39,9 @@ roll() {
   touch .env
   setvar FOLIOLUM_APP_IMAGE "$1"
   setvar FOLIOLUM_API_IMAGE "$2"
+  if [ -n "$backup" ]; then setvar FOLIOLUM_BACKUP_IMAGE "$backup"; fi
   docker compose pull foliolum-app foliolum-api foliolum-db
+  if [ -n "$backup" ]; then docker compose --profile backup pull foliolum-backup; fi
   docker compose up -d
   flock -u 9
 }

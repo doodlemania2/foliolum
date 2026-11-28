@@ -52,10 +52,23 @@ pub struct Relay {
     http: reqwest::Client,
 }
 
+/// The chat-completions address for a relay `url`, which may be the relay's base
+/// (`http://llm-relay:8080`, as OpenBao keeps it), its `/v1`, or the full path.
+pub fn completions_url(url: &str) -> String {
+    let u = url.trim().trim_end_matches('/');
+    if u.ends_with("/chat/completions") {
+        u.to_string()
+    } else if u.ends_with("/v1") {
+        format!("{u}/chat/completions")
+    } else {
+        format!("{u}/v1/chat/completions")
+    }
+}
+
 impl Relay {
     pub fn new(url: &str, key: &str, model: &str) -> Relay {
         Relay {
-            url: url.into(),
+            url: completions_url(url),
             key: key.into(),
             model: model.into(),
             // Under the relay's own 85 s, so a slow answer ends here with a clear message.
@@ -177,6 +190,13 @@ mod tests {
         let chars: Vec<char> = text.chars().collect();
         for x in &s {
             assert_eq!(chars[x.start..x.end].iter().collect::<String>(), x.original);
+        }
+    }
+
+    #[test]
+    fn the_relay_address_may_be_its_base() {
+        for u in ["http://llm-relay:8080", "http://llm-relay:8080/", "http://llm-relay:8080/v1", "http://llm-relay:8080/v1/chat/completions"] {
+            assert_eq!(completions_url(u), "http://llm-relay:8080/v1/chat/completions", "{u}");
         }
     }
 

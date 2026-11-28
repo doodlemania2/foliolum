@@ -201,7 +201,8 @@ async fn load_me(ctx: &egui::Context) {
 
 /// At start: the invite in the address, and the sign-in kept from last time.
 pub fn start(ctx: &egui::Context, query: &str) {
-    if let Some(invite) = account::invite_in(query) {
+    let hash = web_sys::window().and_then(|w| w.location().hash().ok()).unwrap_or_default();
+    if let Some(invite) = account::invite_in(&hash).or_else(|| account::invite_in(query)) {
         let mut st = state();
         st.invite = Some(invite);
         st.open = true;
