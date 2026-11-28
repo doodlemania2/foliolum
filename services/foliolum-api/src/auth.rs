@@ -110,6 +110,8 @@ impl Verifier {
         v.set_issuer(&[&self.issuer]);
         v.set_audience(&[&self.client_id]);
         v.leeway = 30;
+        // Not-before too (off by default), so a token that isn't valid yet, or whose nbf is malformed, is refused.
+        v.validate_nbf = true;
         let c = decode::<Claims>(token, &key, &v).ok()?.claims;
         if c.sub.is_empty() {
             return None;
