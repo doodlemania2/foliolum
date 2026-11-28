@@ -473,52 +473,59 @@ impl SaveDialog {
         let mut st = state();
         let mut open = true;
         let mut out = None;
-        egui::Window::new("Share with your parish").open(&mut open).collapsible(false).resizable(false).default_width(420.0).show(ctx, |ui| {
-            if !st.signed_in() {
-                ui.label("Sign in first: parish templates are shared through your parish.");
-                if ui.button("Sign in…").clicked() {
-                    st.open = true;
+        egui::Window::new("Share with your parish")
+            .open(&mut open)
+            .collapsible(false)
+            .resizable(false)
+            .default_width(420.0)
+            .pivot(egui::Align2::CENTER_TOP)
+            .default_pos(ctx.content_rect().center_top() + egui::vec2(0.0, 140.0))
+            .show(ctx, |ui| {
+                if !st.signed_in() {
+                    ui.label("Sign in first: parish templates are shared through your parish.");
+                    if ui.button("Sign in…").clicked() {
+                        st.open = true;
+                    }
+                    return;
                 }
-                return;
-            }
-            let parishes = st.parishes().to_vec();
-            if parishes.is_empty() {
-                ui.label("Start or join a parish first.");
-                if ui.button("Your parish…").clicked() {
-                    st.open = true;
+                let parishes = st.parishes().to_vec();
+                if parishes.is_empty() {
+                    ui.label("Start or join a parish first.");
+                    if ui.button("Your parish…").clicked() {
+                        st.open = true;
+                    }
+                    return;
                 }
-                return;
-            }
-            if !parishes.iter().any(|p| p.id == self.parish) {
-                self.parish = parishes[0].id.clone();
-            }
-            ui.label("Everyone in the parish can open it from the start screen. Saving again under the same name replaces it.");
-            ui.add_space(4.0);
-            if parishes.len() > 1 {
-                ui.horizontal(|ui| {
-                    ui.label("Parish");
-                    let current = parishes.iter().find(|p| p.id == self.parish).map(|p| p.name.clone()).unwrap_or_default();
-                    egui::ComboBox::from_id_salt("template_parish").selected_text(current).show_ui(ui, |ui| {
-                        for p in &parishes {
-                            ui.selectable_value(&mut self.parish, p.id.clone(), &p.name);
-                        }
+                if !parishes.iter().any(|p| p.id == self.parish) {
+                    self.parish = parishes[0].id.clone();
+                }
+                ui.label("Everyone in the parish can open it from the start screen. Saving again under the same name replaces it.");
+                ui.add_space(4.0);
+                if parishes.len() > 1 {
+                    ui.horizontal(|ui| {
+                        ui.label("Parish");
+                        let current = parishes.iter().find(|p| p.id == self.parish).map(|p| p.name.clone()).unwrap_or_default();
+                        egui::ComboBox::from_id_salt("template_parish").selected_text(current).show_ui(ui, |ui| {
+                            for p in &parishes {
+                                ui.selectable_value(&mut self.parish, p.id.clone(), &p.name);
+                            }
+                        });
                     });
-                });
-            }
-            field(ui, "Template name", &mut self.name, false);
-            if ui.add_enabled(!self.name.trim().is_empty() && st.busy.is_none(), egui::Button::new("Save to the parish")).clicked() {
-                out = Some((self.parish.clone(), self.name.trim().to_string()));
-            }
-            if let Some(b) = &st.busy {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(b.as_str());
-                });
-            }
-            if !st.message.is_empty() {
-                ui.label(egui::RichText::new(st.message.as_str()).small());
-            }
-        });
+                }
+                field(ui, "Template name", &mut self.name, false);
+                if ui.add_enabled(!self.name.trim().is_empty() && st.busy.is_none(), egui::Button::new("Save to the parish")).clicked() {
+                    out = Some((self.parish.clone(), self.name.trim().to_string()));
+                }
+                if let Some(b) = &st.busy {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(b.as_str());
+                    });
+                }
+                if !st.message.is_empty() {
+                    ui.label(egui::RichText::new(st.message.as_str()).small());
+                }
+            });
         self.open = open;
         out
     }

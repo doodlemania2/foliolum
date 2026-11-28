@@ -121,7 +121,7 @@ impl Dialog {
         }
         let mut open = true;
         let mut want = None;
-        egui::Window::new("Proofread").open(&mut open).collapsible(false).resizable(true).default_width(480.0).show(ctx, |ui| {
+        egui::Window::new("Proofread").open(&mut open).collapsible(false).resizable(true).default_width(480.0).pivot(egui::Align2::CENTER_TOP).default_pos(ctx.content_rect().center_top() + egui::vec2(0.0, 140.0)).show(ctx, |ui| {
             ui.label("Checks the selected text box for spelling, grammar and punctuation. Nothing changes until you apply a suggestion, and Undo takes back each one.");
             ui.add_space(4.0);
             if self.busy {
