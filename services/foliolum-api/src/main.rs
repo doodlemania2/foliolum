@@ -5,7 +5,8 @@
 //! - `FOLIOLUM_APP_ROLE`, `FOLIOLUM_APP_PASSWORD`: the role it serves as (rows only).
 //! - `FOLIOLUM_OWNER_ROLE`, `FOLIOLUM_OWNER_PASSWORD`: the schema's owner, for the migrations at start.
 //! - `FOLIOLUM_OIDC_ISSUER`, `FOLIOLUM_OIDC_CLIENT_ID`, `FOLIOLUM_OIDC_JWKS_URL`: Claviger.
-//! - `FOLIOLUM_LLM_URL`, `FOLIOLUM_LLM_KEY`, `FOLIOLUM_LLM_MODEL`: the AI relay. Without them
+//! - `FOLIOLUM_LLM_URL` (the relay's base address, or its full chat-completions address),
+//!   `FOLIOLUM_LLM_KEY`, `FOLIOLUM_LLM_MODEL`: the AI relay. Without them
 //!   proofreading answers "not available" and everything else works.
 //! - `FOLIOLUM_API_LISTEN` (default `0.0.0.0:8081`).
 use std::sync::Arc;
