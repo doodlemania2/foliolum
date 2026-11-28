@@ -29,7 +29,7 @@ pub const SCOPES: &str = "openid profile email offline_access";
 pub const REDIRECT: &str = "https://app.foliolum.app/auth/callback";
 /// The channel `/auth/callback` posts its query on.
 pub const CHANNEL: &str = "foliolum-auth";
-/// Where an invite link points: the editor, with `?invite=<token>`.
+/// Where an invite link points: the editor, with `#invite=<token>`.
 pub const APP: &str = "https://app.foliolum.app/";
 pub const MIN_PASSWORD: usize = 8;
 
@@ -164,16 +164,18 @@ pub fn read_sign_up(status: u16, body: &str) -> Result<(), String> {
     })
 }
 
-/// The invite token in the address the editor was opened with (`?invite=…`).
-pub fn invite_in(query: &str) -> Option<String> {
-    form_urlencoded::parse(query.trim_start_matches('?').as_bytes())
+/// The invite token in the address the editor was opened with: after the `#` (`#invite=…`), which
+/// the browser never sends to a server, so the token stays out of access logs; `?invite=…` is read
+/// too. `part` is the location's hash or search.
+pub fn invite_in(part: &str) -> Option<String> {
+    form_urlencoded::parse(part.trim_start_matches(['?', '#']).as_bytes())
         .find(|(k, _)| k == "invite")
         .map(|(_, v)| v.trim().to_string())
         .filter(|v| !v.is_empty() && v.len() <= 100 && v.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_'))
 }
 
 pub fn invite_link(token: &str) -> String {
-    format!("{APP}?invite={token}")
+    format!("{APP}#invite={token}")
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
@@ -634,8 +636,10 @@ mod tests {
     #[test]
     fn invite_links_round_trip_and_junk_is_ignored() {
         let link = invite_link("Ab_9-x");
-        assert_eq!(link, "https://app.foliolum.app/?invite=Ab_9-x");
-        assert_eq!(invite_in(link.split_once('?').map(|(_, q)| q).unwrap_or_default()), Some("Ab_9-x".into()));
+        assert_eq!(link, "https://app.foliolum.app/#invite=Ab_9-x");
+        assert_eq!(invite_in(link.split_once('#').map(|(_, q)| q).unwrap_or_default()), Some("Ab_9-x".into()));
+        assert_eq!(invite_in("#invite=Ab_9-x"), Some("Ab_9-x".into()));
+        assert_eq!(invite_in("?invite=Ab_9-x"), Some("Ab_9-x".into()), "older links still work");
         assert_eq!(invite_in("?demo=bulletin&invite=%3Cscript%3E"), None);
         assert_eq!(invite_in("?demo=bulletin"), None);
     }
