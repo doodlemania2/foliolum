@@ -37,7 +37,7 @@
     {
       "id": "send-for-signature",
       "name": "Send for signature",
-      "status": "building",
+      "status": "ready",
       "summary": "Send a finished document to TDPdf Sign, which emails each person a link to sign it.",
       "audiences": [
         "member"
@@ -100,7 +100,7 @@
     {
       "id": "parish-sharing",
       "name": "Share templates with your parish",
-      "status": "building",
+      "status": "ready",
       "summary": "Sign in, start or join your parish with an invite link, and open the templates everyone in it shares.",
       "audiences": [
         "member"
@@ -115,7 +115,7 @@
     {
       "id": "ai-proofreading",
       "name": "Proofread",
-      "status": "building",
+      "status": "ready",
       "summary": "Checks a text box for spelling, grammar and punctuation, and lets you apply each fix one at a time.",
       "audiences": [
         "member"
